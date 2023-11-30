@@ -11,28 +11,79 @@ import matplotlib.pyplot as plt
 
 class price_sim:
 
+  """
+    A Python class for simulating and analyzing financial price data using Geometric Brownian Motion (GBM).
+
+    This class provides a set of functions to load historical price data, calculate returns, simulate GBM,
+    and visualize the results. It includes functionalities for both regular simulation and backtesting.
+
+    Attributes:
+        - ticker (str): Ticker symbol for the financial instrument.
+        - start_date (list): Start date [year, month, day] for historical data loading.
+        - end_date (list/str): End date [year, month, day] or 'today' for historical data loading.
+        - interval (str): Data interval (e.g., '1d') for historical data loading.
+        - predicted_period (int): Number of periods for future price simulation.
+        - backtesting (bool): True for backtesting, False for regular simulation.
+
+    Functions:
+        - data_loading: Compiles historical price data from Yahoo Finance for a specified ticker.
+        - returnify: Calculates simple returns for provided financial data.
+        - log_returnify: Calculates log returns for provided financial data.
+        - GBM_params: Calculates mean and standard deviation of returns.
+        - GBM: Simulates Geometric Brownian Motion for a given set of parameters.
+        - plot_paths: Plots realizations of GBM along with actual exchange rates.
+        - plot_paths_on_profit_space: Plots realizations of GBM with profit space boundaries.
+        - pipeline: Executes the complete pipeline for GBM simulation and visualization.
+
+    Note:
+        - The class assumes the use of Pandas for handling financial data and NumPy for numerical operations.
+        - Visualization functionalities use Matplotlib for plotting.
+  """
+
   def data_loading(self, ticker, start_date, end_date, interval):
 
-    self.ticker = ticker
-    self.start_date = start_date
-    self.end_date = end_date
-    self.interval = interval
+      """
+      - Calculates log returns for the provided financial data.
 
-    yh_start_date = int(time.mktime(datetime.datetime(self.start_date[0], self.start_date[1], self.start_date[2], 23, 59).timetuple()))
+    - Parameters:
+          - FX_data (Pandas DataFrame): Financial data.
+          - date_col (str, optional): Column containing dates.
+        
+      - Returns: 
+        - Pandas DataFrame with dates and corresponding log returns.
+      """
 
-    if self.end_date == 'today':
-      yh_end_date = int(time.mktime(datetime.datetime.now().timetuple()))
-    else:
-      yh_end_date = int(time.mktime(datetime.datetime(self.end_date[0], self.end_date[1], self.end_date[2], 23, 59).timetuple()))
+      self.ticker = ticker
+      self.start_date = start_date
+      self.end_date = end_date
+      self.interval = interval
 
-    query_string1 = f'https://query1.finance.yahoo.com/v7/finance/download/{ticker}?period1={yh_start_date}&period2={yh_end_date}&interval={self.interval}&events=history&includeAdjustedClose=true'
+      yh_start_date = int(time.mktime(datetime.datetime(self.start_date[0], self.start_date[1], self.start_date[2], 23, 59).timetuple()))
 
-    FX_data = pd.read_csv(query_string1)
-    FX_data['Adj Close'] = FX_data['Adj Close']
+      if self.end_date == 'today':
+        yh_end_date = int(time.mktime(datetime.datetime.now().timetuple()))
+      else:
+        yh_end_date = int(time.mktime(datetime.datetime(self.end_date[0], self.end_date[1], self.end_date[2], 23, 59).timetuple()))
 
-    return FX_data
+      query_string1 = f'https://query1.finance.yahoo.com/v7/finance/download/{ticker}?period1={yh_start_date}&period2={yh_end_date}&interval={self.interval}&events=history&includeAdjustedClose=true'
+
+      FX_data = pd.read_csv(query_string1)
+      FX_data['Adj Close'] = FX_data['Adj Close']
+
+      return FX_data
 
   def returnify(self, FX_data, date_col = None):
+
+      """
+      - Calculates simple returns for the provided financial data.
+  
+     - Parameters:
+          - FX_data (Pandas DataFrame): Financial data.
+          - date_col (str, optional): Column containing dates.
+        
+      - Returns: 
+          - Pandas DataFrame with dates and corresponding returns.
+      """
 
       self.FX_data = FX_data
       self.date_col = date_col
@@ -52,6 +103,17 @@ class price_sim:
 
   def log_returnify(self, FX_data, date_col = None):
 
+      """
+    - Calculates log returns for the provided financial data.
+
+    - Parameters:
+        - FX_data (Pandas DataFrame): Financial data.
+        - date_col (str, optional): Column containing dates.
+        
+    - Returns: 
+        - Pandas DataFrame with dates and corresponding log returns.
+      """
+
       self.FX_data = FX_data
       self.date_col = date_col
 
@@ -70,6 +132,16 @@ class price_sim:
 
   def GBM_params(self, returns):
 
+      """
+    - Calculates the mean (mu) and standard deviation (sigma) of returns.
+
+    - Parameters:
+        - returns (Pandas Series): Financial returns.
+        
+    - Returns: 
+        - Tuple (mu, sigma) representing mean and standard deviation.
+      """
+
       self.returns = returns
 
       mu = self.returns.describe().at['mean']
@@ -78,6 +150,22 @@ class price_sim:
       return mu, sigma
 
   def GBM(self, mu, sigma, S0, steps, n_paths, plot = 'N', pandas = 'Y'):
+
+      """
+    - Simulates Geometric Brownian Motion (GBM) for a given set of parameters.
+
+    - Parameters:
+        - mu (float): Mean of returns.
+        - sigma (float): Standard deviation of returns.
+        - S0 (float): Initial stock price.
+        - steps (int): Number of time steps.
+        - n_paths (int): Number of simulation paths.
+        - plot (str): 'Y' to plot simulation, 'N' otherwise.
+        - pandas (str): 'Y' to return Pandas DataFrame, 'N' for NumPy array.
+        
+    - Returns: 
+        - Pandas DataFrame or NumPy array representing GBM simulation.
+      """
 
       self.mu = mu
       self.sigma = sigma
@@ -128,6 +216,16 @@ class price_sim:
 
   def plot_paths(self, sim_df, FX_df, predicted_period, backtesting = False):
 
+    """
+    - Plots realizations of Geometric Brownian Motion along with actual exchange rates.
+
+    - Parameters:
+        - sim_df (Pandas DataFrame): Simulated GBM data.
+        - FX_df (Pandas Series): Actual exchange rate data.
+        - predicted_period (int): Number of predicted periods.
+        - backtesting (bool): True for backtesting, False for regular simulation.
+    """
+
     self.ticker = 'USD-Y'
 
     self.sim_df = sim_df
@@ -163,6 +261,17 @@ class price_sim:
     plt.show()
 
   def plot_paths_on_profit_space(self, sim_df, FX_df, predicted_period, avg_returns, backtesting = False):
+
+    """
+    - Plots realizations of Geometric Brownian Motion with profit space boundaries.
+
+    - Parameters:
+        - sim_df (Pandas DataFrame): Simulated GBM data.
+        - FX_df (Pandas Series): Actual exchange rate data.
+        - predicted_period (int): Number of predicted periods.
+        - avg_returns (float): Average returns for profit space boundaries.
+        - backtesting (bool): True for backtesting, False for regular simulation.
+    """
 
     t_start = 0
     t_end = 1
@@ -225,6 +334,20 @@ class price_sim:
 
   def pipeline(self, predicted_period, FX_data = pd.DataFrame(), ticker = '', start_date = [], end_date = [], interval = '', backtesting = True, plot_sim = False,):
 
+    """
+    - Executes the complete pipeline for Geometric Brownian Motion simulation and visualization.
+
+    - Parameters:
+        - predicted_period (int): Number of predicted periods.
+        - FX_data (Pandas DataFrame, optional): Historical price data.
+        - ticker (str): Ticker symbol.
+        - start_date (list): Start date [year, month, day].
+        - end_date (list/str): End date [year, month, day] or 'today'.
+        - interval (str): Data interval (e.g., '1d').
+        - backtesting (bool): True for backtesting, False for regular simulation.
+        - plot_sim (bool): True to plot the simulation, False otherwise.
+    """
+
     self.ticker = ticker
     self.start_date = start_date
     self.end_date = end_date
@@ -263,7 +386,52 @@ class price_sim:
 
 class volume_sim:
 
+  """
+    A Python class for simulating and analyzing financial volume data using Geometric Brownian Motion (GBM)
+    and Ornstein-Uhlenbeck Process (UOP).
+
+    This class provides a set of functions to calculate returns, simulate GBM and UOP processes, and visualize
+    the results. It includes functionalities for both regular simulation and backtesting.
+
+    Attributes:
+        - mu (float): Mean of volume returns.
+        - sigma (float): Standard deviation of volume returns.
+        - theta (float): Speed of mean reversion for UOP.
+        - S0 (float): Initial volume.
+        - steps (int): Number of time steps for simulation.
+        - n_paths (int): Number of simulation paths.
+        - plot (str): 'Y' to plot simulation, 'N' otherwise.
+        - pandas (str): 'Y' to return Pandas DataFrame, 'N' for NumPy array.
+        - ticker (str): Ticker symbol for the financial instrument.
+        - predicted_period (int): Number of predicted periods for simulation.
+        - backtesting (bool): True for backtesting, False for regular simulation.
+
+    Functions:
+        - returnify: Calculates simple returns for provided financial volume data.
+        - log_returnify: Calculates log returns for provided financial volume data.
+        - GBM_params: Calculates the mean and standard deviation of volume returns.
+        - GBM: Simulates Geometric Brownian Motion for a given set of parameters.
+        - UOP: Simulates Ornstein-Uhlenbeck Process for a given set of parameters.
+        - plot_paths: Plots realizations of Ornstein-Uhlenbeck Process along with actual volume data.
+        - pipeline: Executes the complete pipeline for Ornstein-Uhlenbeck Process simulation and visualization.
+
+    Note:
+        - The class assumes the use of Pandas for handling financial data and NumPy for numerical operations.
+        - Visualization functionalities use Matplotlib for plotting.
+  """
+
   def returnify(self, FX_data, date_col = None):
+
+      """
+    - Calculates simple returns for the provided financial volume data.
+
+    - Parameters:
+        - FX_data (Pandas DataFrame): Financial volume data.
+        - date_col (str, optional): Column containing dates.
+        
+    - Returns: 
+        - Pandas DataFrame with dates and corresponding returns.
+      """
 
       self.FX_data = FX_data
       self.date_col = date_col
@@ -283,6 +451,17 @@ class volume_sim:
 
   def log_returnify(self, FX_data, date_col = None):
 
+      """
+    - Calculates log returns for the provided financial volume data.
+
+    - Parameters:
+        - FX_data (Pandas DataFrame): Financial volume data.
+        - date_col (str, optional): Column containing dates.
+        
+    - Returns: 
+        - Pandas DataFrame with dates and corresponding log returns.
+      """
+
       self.FX_data = FX_data
       self.date_col = date_col
 
@@ -301,6 +480,16 @@ class volume_sim:
 
   def GBM_params(self, returns):
 
+      """
+    - Calculates the mean (mu) and standard deviation (sigma) of volume returns.
+
+    - Parameters:
+        - returns (Pandas Series): Financial volume returns.
+        
+    - Returns: 
+        - Tuple (mu, sigma) representing mean and standard deviation.
+      """
+
       self.returns = returns
 
       mu = self.returns.describe().at['mean']
@@ -309,6 +498,22 @@ class volume_sim:
       return mu, sigma
 
   def GBM(self, mu, sigma, S0, steps, n_paths, plot = 'N', pandas = 'Y'):
+
+      """
+    - Simulates Geometric Brownian Motion (GBM) for a given set of parameters.
+
+    - Parameters:
+        - mu (float): Mean of volume returns.
+        - sigma (float): Standard deviation of volume returns.
+        - S0 (float): Initial volume.
+        - steps (int): Number of time steps.
+        - n_paths (int): Number of simulation paths.
+        - plot (str): 'Y' to plot simulation, 'N' otherwise.
+        - pandas (str): 'Y' to return Pandas DataFrame, 'N' for NumPy array.
+        
+    - Returns: 
+        - Pandas DataFrame or NumPy array representing GBM simulation.
+      """
 
       self.mu = mu
       self.sigma = sigma
@@ -360,6 +565,23 @@ class volume_sim:
   def UOP(self, mu, sigma, theta, S0, steps, n_paths, plot = 'N', pandas = 'Y'):
   # Set the parameters of the Ornstein-Uhlenbeck process
 
+    """
+    - Simulates Ornstein-Uhlenbeck Process (UOP) for a given set of parameters.
+
+    - Parameters:
+        - mu (float): Mean of volume returns.
+        - sigma (float): Standard deviation of volume returns.
+        - theta (float): Speed of mean reversion.
+        - S0 (float): Initial volume.
+        - steps (int): Number of time steps.
+        - n_paths (int): Number of simulation paths.
+        - plot (str): 'Y' to plot simulation, 'N' otherwise.
+        - pandas (str): 'Y' to return Pandas DataFrame, 'N' for NumPy array.
+        
+    - Returns: 
+        - Pandas DataFrame or NumPy array representing UOP simulation.
+    """
+
     self.mu = mu
     self.sigma = sigma
     self.theta = theta
@@ -402,6 +624,16 @@ class volume_sim:
 
   def plot_paths(self, sim_df, FX_df, predicted_period, backtesting = False):
 
+    """
+    - Plots realizations of Ornstein-Uhlenbeck Process along with actual volume data.
+
+    - Parameters:
+        - sim_df (Pandas DataFrame): Simulated UOP data.
+        - FX_df (Pandas Series): Actual volume data.
+        - predicted_period (int): Number of predicted periods.
+        - backtesting (bool): True for backtesting, False for regular simulation.
+    """
+
     self.ticker = 'USD-Y'
 
     self.sim_df = sim_df
@@ -437,6 +669,16 @@ class volume_sim:
     plt.show()
 
   def pipeline(self, ticker, volume, predicted_period, backtesting):
+
+    """
+    - Executes the complete pipeline for Ornstein-Uhlenbeck Process simulation and visualization.
+
+    - Parameters:
+        - ticker (str): Ticker symbol.
+        - volume (Pandas Series): Historical volume data.
+        - predicted_period (int): Number of predicted periods.
+        - backtesting (bool): True for backtesting, False for regular simulation.
+    """
 
     self.ticker = ticker
     #self.start_date = start_date
@@ -478,6 +720,33 @@ class volume_sim:
 # Y = y = the other one
 
 class payoff:
+
+    """
+    A Python class for financial modeling and simulation related to automated marketmaker payoffs. Please be advised that current version of payoff calculator is using UNISWAP V2 engine.
+
+    Functions:
+        - k_product(x, y): Calculates the product of two values x and y.
+        - value_in_x(x, y, FX): Calculates the value in X given X and Y amounts and an FX ratio.
+        - FX_x_over_y(k_pool, y_amount): Calculates the FX ratio of X over Y for a pool.
+        - deposit_split(deposit_value_in_x, percentage_of_x, FX_x_over_y): Splits a deposit value into X and Y amounts based on a given percentage.
+        - pool_share(k_depositor, k_pool): Calculates the pool share for a depositor.
+        - interest_income(accrued_fee_in_x, value_in_x, relative='N'): Calculates interest income for a depositor.
+        - hold_in_x(amount_x_t0, amount_y_t0, FX_tn): Calculates the portfolio value in X.
+        - impermanent_loss(FX_in_x_t0, FX_in_x_tn, relative='N'): Calculates impermanent loss in either absolute or relative terms.
+        - fee_amount_by_orders(volume_amount_in_origin, fee_rate, fee_split): Calculates fee amounts based on volume, fee rate, and fee split.
+        - swap_calc(quote_type, swap_from_amount_reserve, swap_to_amount_reserve): Calculates swap amount based on quote type.
+        - fee_amount_by_reserves(FX_in_x, volume_in_x, fee_rate): Calculates fee amounts based on reserves, FX ratio, volume, and fee rate.
+        - reserves_calc(k, FX_in_x, calculate_x=True): Calculates reserves amount based on reserves, FX ratio, and a flag to determine X or Y.
+        - profitability_bounds(FX_in_x_t0, fee_rate): Calculates profitability bounds for given initial FX ratio and fee rate.
+        - t0_calc(pool_fee, amount_x_pool_t0, amount_y_pool_t0, total_investment_x): Performs pre-calculation for time step 0.
+        - tn_calc(FX_timeseries, volume_timeseries, max_paths): Calculates results for each time step 'n' based on given time series and paths.
+        - pipeline(pool_fee, amount_x_pool_t0, amount_y_pool_t0, total_investment_x, FX_timeseries, volume_timeseries, max_paths, deposit_split_percentage): Executes the complete pipeline for payoff calculation.
+
+    Note:
+        - This class is designed for financial modeling and simulation purposes.
+        - The provided functions are used to calculate various financial metrics and performance indicators.
+    """
+
     def __init__(self):
 
         self.pool_reserves = pd.DataFrame(
@@ -499,29 +768,130 @@ class payoff:
         )
 
     def k_product(self, x, y):
+
+        """
+        Calculates the product of x and y.
+
+        Parameters:
+        - x (float): The first parameter.
+        - y (float): The second parameter.
+
+        Returns:
+        - float: The product of x and y.
+        """
+
         return(x*y)
 
     def value_in_x(self, x, y, FX):
+
+        """
+        Calculates a value using x, y, and a given exchange rate FX.
+
+        Parameters:
+        - x (float): The first parameter.
+        - y (float): The second parameter.
+        - FX (float): The exchange rate.
+
+        Returns:
+        - float: The calculated value.
+        """
+
         return(x + y * FX)
 
     def FX_x_over_y(self, k_pool, y_amount):
+
+        """
+        Calculates the ratio of a pool parameter k_pool to the square of y_amount.
+
+        Parameters:
+        - k_pool (float): The pool parameter.
+        - y_amount (float): The y amount.
+
+        Returns:
+        - float: The calculated ratio.
+        """
+
         return(k_pool / (y_amount**2))
 
     def deposit_split(self, deposit_value_in_x, percentage_of_x, FX_x_over_y):
+
+        """
+        Splits a deposit into x and y components based on certain parameters.
+
+        Parameters:
+        - deposit_value_in_x (float): The deposit value in x.
+        - percentage_of_x (float): The percentage of x.
+        - FX_x_over_y (float): The calculated ratio.
+
+        Returns:
+        - tuple: A tuple containing x amount and y amount.
+        """
+
         x_amount = deposit_value_in_x * percentage_of_x
         y_amount = (deposit_value_in_x - x_amount) / FX_x_over_y
         return x_amount, y_amount
 
     def pool_share(self, k_depositor, k_pool):
+
+        """
+        Calculates the pool share based on depositor and pool parameters.
+
+        Parameters:
+        - k_depositor (float): The depositor parameter.
+        - k_pool (float): The pool parameter.
+
+        Returns:
+        - float: The calculated pool share.
+        """
+
         return (math.sqrt(k_depositor)/math.sqrt(k_pool))
 
     def interest_income(self, accruded_fee_in_x, value_in_x, relative = 'N'):
+
+        """
+        Calculates interest income based on accrued fees and portfolio value.
+
+        Parameters:
+        - accruded_fee_in_x (float): Accrued fee in x.
+        - value_in_x (float): Portfolio value in x.
+        - relative (str): 'N' for non-relative, 'Y' for relative.
+
+        Returns:
+        - float: The calculated interest income.
+        """
+
         return accruded_fee_in_x/value_in_x
 
     def hold_in_x(self, amount_x_t0, amount_y_t0, FX_tn):
+
+        """
+        Calculates a value based on initial amounts and a given exchange rate.
+
+        Parameters:
+        - amount_x_t0 (float): Initial amount in x.
+        - amount_y_t0 (float): Initial amount in y.
+        - FX_tn (float): The exchange rate.
+
+        Returns:
+        - float: The calculated value.
+        """
+
         return amount_x_t0 + amount_y_t0 * FX_tn
 
     def impermanent_loss(self, FX_in_x_t0, FX_in_x_tn, relative = 'N'):
+
+        """
+        Calculates impermanent loss based on different scenarios.
+
+        Parameters:
+        - FX_in_x_t0 (float): FX in x at time 0.
+        - FX_in_x_tn (float): FX in x at time n.
+        - relative (str): 'N' for non-relative, 'Y' for relative.
+
+        Returns:
+        - float: The calculated impermanent loss.
+        """
+
         if relative == 'N':
             result = value_in_x - hodl_in_x
         else:
@@ -529,11 +899,36 @@ class payoff:
         return result
 
     def fee_amount_by_orders(self, volume_amount_in_origin, fee_rate, fee_split): 
+
+        """
+        Calculates fee amounts based on volume and fee rates.
+
+        Parameters:
+        - volume_amount_in_origin (dict): Volume amount in origin.
+        - fee_rate (float): The fee rate.
+        - fee_split (float): The fee split.
+
+        Returns:
+        - tuple: A tuple containing x fee amount and y fee amount.
+        """
+
         x_fee_amount = list(volume_amount_in_origin.values())[0] * fee_rate
         y_fee_amount = list(volume_amount_in_origin.values())[1] * fee_rate
         return x_fee_amount, y_fee_amount
 
     def swap_calc(self, quote_type, swap_from_amount_reserve , swap_to_amount_reserve): 
+
+        """
+        Calculates swap amounts based on different scenarios.
+
+        Parameters:
+        - quote_type (str): The type of quote ('ask' or 'bid').
+        - swap_from_amount_reserve (list): List containing swap from amount reserve parameters.
+        - swap_to_amount_reserve (list): List containing swap to amount reserve parameters.
+
+        Returns:
+        - float: The calculated result.
+        """
 
         x = swap_from_amount_reserve[2]
         y = swap_to_amount_reserve[2]
@@ -555,6 +950,18 @@ class payoff:
 
     def fee_amount_by_reserves(self, FX_in_x, volume_in_x, fee_rate):
 
+        """
+        Calculates fee amounts based on reserves and other parameters.
+
+        Parameters:
+        - FX_in_x (float): FX in x.
+        - volume_in_x (float): Volume in x.
+        - fee_rate (float): The fee rate.
+
+        Returns:
+        - tuple: A tuple containing x fee amount and y fee amount.
+        """
+
         y_amount_exchanged = volume_in_x / FX_in_x
         y_fee_amount = y_amount_exchanged / 2 * fee_rate
         x_fee_amount = volume_in_x / 2 * fee_rate
@@ -562,6 +969,19 @@ class payoff:
         return x_fee_amount, y_fee_amount
 
     def reserves_calc(self, k, FX_in_x, calculate_x = True):
+
+        """
+        Calculates reserves based on pool parameters and exchange rates.
+
+        Parameters:
+        - k (float): The pool parameter.
+        - FX_in_x (float): FX in x.
+        - calculate_x (bool): A flag to determine if x should be calculated.
+
+        Returns:
+        - float: The calculated result.
+        """
+
         if calculate_x == True:
             x_amount = (k * FX_in_x)**(1/2)
             result = x_amount
@@ -574,6 +994,18 @@ class payoff:
         return result
 
     def profitability_bounds(self, FX_in_x_t0, fee_rate):
+
+        """
+        Calculates profitability bounds based on FX at time 0 and a given fee rate.
+
+        Parameters:
+        - FX_in_x_t0 (float): FX in x at time 0.
+        - fee_rate (float): The fee rate.
+
+        Returns:
+        - tuple: Two values representing profitability bounds (x1, x2).
+        """
+
         y = FX_in_x_t0
         rho = fee_rate
 
@@ -583,6 +1015,20 @@ class payoff:
         return x1, x2
 
     def t0_calc(self, pool_fee, amount_x_pool_t0, amount_y_pool_t0, total_investment_x):
+
+        """
+        Performs pre-calculation for the initial time point for the pool and depositor.
+
+        Parameters:
+        - pool_fee (float): The pool fee.
+        - amount_x_pool_t0 (float): Initial amount in x for the pool.
+        - amount_y_pool_t0 (float): Initial amount in y for the pool.
+        - total_investment_x (float): Total investment in x.
+
+        Returns:
+        - None
+        """
+
         # t0 pool pre - calculation
         self.pool_performance.at[0, 'pool_fee'] = pool_fee
         self.pool_reserves.at[0, 'k'] = self.k_product(amount_x_pool_t0, amount_y_pool_t0)
@@ -637,6 +1083,18 @@ class payoff:
         
     def tn_calc(self, FX_timeseries, volume_timeseries, max_paths):
         
+        """
+        Calculates payoff over time for multiple paths using price and volume time series data.
+
+        Parameters:
+        - FX_timeseries (DataFrame): DataFrame containing FX values over time.
+        - volume_timeseries (DataFrame): DataFrame containing volume values over time.
+        - max_paths (int): The maximum number of paths.
+
+        Returns:
+        - None
+        """
+
         self.paths_df = pd.DataFrame()
 
         for j in range(1,max_paths):
@@ -644,8 +1102,6 @@ class payoff:
 
             for i in range(1, len(FX_timeseries.iloc[:,j])):
 
-
-                # %%
                 # tn pre - calculation
                 self.pool_performance.at[i, 'pool_fee'] = self.pool_performance.at[i-1, 'pool_fee']
                 self.pool_performance.at[i, 'FX'] = FX_timeseries.iloc[i, j] ####################### Stoch FX input
@@ -749,6 +1205,19 @@ class payoff:
             self.paths_df = self.paths_df.reset_index(drop = True)
 
     def progress_bar(current, total, bar_length=20):
+
+        """ 
+        Displays a progress bar to track progress.
+
+        Parameters:
+        - current (int): The current progress value.
+        - total (int): The total progress value.
+        - bar_length (int): The length of the progress bar.
+
+        Returns:
+        - None
+        """
+
         fraction = current / total
 
         arrow = int(fraction * bar_length - 1) * '-' + '>'
@@ -759,6 +1228,23 @@ class payoff:
         print(f'Progress: [{arrow}{padding}] {int(fraction*100)}%', end=ending)
 
     def pipeline(self, pool_fee, amount_x_pool_t0, amount_y_pool_t0, total_investment_x, FX_timeseries, volume_timeseries, max_paths, deposit_split_percentage):
+
+        """
+        Executes a pipeline of calculations for pool and depositor over time.
+
+        Parameters:
+        - pool_fee (float): The pool fee.
+        - amount_x_pool_t0 (float): Initial amount in x for the pool.
+        - amount_y_pool_t0 (float): Initial amount in y for the pool.
+        - total_investment_x (float): Total investment in x.
+        - FX_timeseries (DataFrame): DataFrame containing FX values over time.
+        - volume_timeseries (DataFrame): DataFrame containing volume values over time.
+        - max_paths (int): The maximum number of paths.
+        - deposit_split_percentage (float): The percentage used for deposit split.
+
+        Returns:
+        - None
+        """
 
         self.pool_fee = pool_fee
         self.amount_x_pool_t0 = amount_x_pool_t0
@@ -782,6 +1268,20 @@ class payoff:
         )
 
 class analytics:
+
+    """
+    Description:
+        The `analytics` class performs financial analytics on a set of paths, focusing on cumulative interest income and net interest income. It is designed to work with a DataFrame containing financial paths, providing methods to calculate and analyze relevant metrics.
+
+    Functions:
+        - endpoint_stat(self): Computes and displays descriptive statistics for cumulative interest income, net interest income, and FX values in the endpoint DataFrame.
+
+      
+    Note:
+        - This class is designed for financial modeling and simulation purposes.
+        - The provided functions are used to calculate various financial metrics and performance indicators.
+    """
+
     def __init__(self, paths_df):
         self.paths_df = paths_df
 
@@ -808,10 +1308,50 @@ class analytics:
         self.endpoint_df = self.endpoint_df.reset_index(drop = True)
 
     def endpoint_stat(self):
+
+        """
+        Computes and displays descriptive statistics for cumulative interest income, 
+        net interest income, and FX values in the endpoint DataFrame.
+
+        Parameters:
+            None
+
+        Returns:
+            None
+        """
+
         self.endpoint_df[['cum_II', 'cum_II_netto', 'FX']].describe()
 
 class visualisation:
+
+    """
+    The Visualisation class provides methods for generating 3D visualizations of simulation paths and Impermanent Loss (IL) curves.
+
+    Attributes:
+    - paths_df (DataFrame): DataFrame containing simulation paths data.
+    - pool_performance (DataFrame): DataFrame containing pool performance data.
+    - analytics_df (DataFrame): DataFrame containing analytics data derived from paths_df.
+    - endpoint_x_range (list): X-axis range for the simulation endpoints.
+    - endpoint_y_mean (float): Mean value of the cumulative net returns at simulation endpoints.
+    - endpoint_y_std (float): Standard deviation of the cumulative net returns at simulation endpoints.
+    - amm_engine (Payoff): An instance of the Payoff class for AMM (Automated Market Maker) calculations.
+
+    Methods:
+    - __init__(self, paths_df, pool_performance): Initializes the Visualisation class with simulation data.
+    - path_plot(self): Generates a 3D plot of simulation paths, displaying price levels, days, and returns.
+    - endpoint_plot(self, IL_curve_x_range=[], IL_curve_y_offset=[]): Generates a 3D plot of simulation paths with an overlay of an IL curve.
+    """
+
     def __init__(self, paths_df, pool_performance):
+
+        """
+        Initializes the Visualisation class.
+
+        Parameters:
+        - paths_df (DataFrame): DataFrame containing simulation paths data.
+        - pool_performance (DataFrame): DataFrame containing pool performance data.
+        """
+
         self.paths_df = paths_df
         self.pool_performance = pool_performance
         self.analytics_df = analytics(self.paths_df)
@@ -821,6 +1361,11 @@ class visualisation:
         self.amm_engine = payoff()
 
     def path_plot(self):
+
+        """
+        Generates a 3D plot of simulation paths, displaying price levels, days, and returns.
+        """
+
         # Visualisation
 
         #x, y = np.meshgrid(pool_performance['FX'], list(pool_performance.index))
@@ -867,6 +1412,15 @@ class visualisation:
         self.ax.set_zlabel('Returns')
 
     def endpoint_plot(self, IL_curve_x_range = [], IL_curve_y_offset = []):
+
+        """
+        Generates a scatter plot of simulation path endpoints with an overlay of an Impermanent Loss (IL) curve.
+
+        Parameters:
+        - IL_curve_x_range (list, optional): X-axis range for the IL curve. Default is calculated from data.
+        - IL_curve_y_offset (list, optional): Y-axis offset for the IL curve. Default is calculated from data.
+        """
+
         # endpoint extraction
         FX_t0 = self.paths_df.iloc[0,1]['FX'][0]
 
@@ -947,14 +1501,34 @@ class visualisation:
         self.ax_endpoint.set_zlabel('Returns')
 
 class one_pipeline:
+
+    """
+    The one_pipeline class represents a simulation pipeline for evaluating the performance of an Automated Market Maker (AMM) pool.
+
+    Attributes:
+    - price (PriceSim): An instance of the PriceSim class for simulating price movements.
+    - volume (VolumeSim): An instance of the VolumeSim class for simulating volume movements.
+    - amm (Payoff): An instance of the Payoff class for AMM calculations.
+    
+    Methods:
+    - __init__(
+        self, 
+        pool_fee, 
+        amount_x_pool_t0, 
+        amount_y_pool_t0, 
+        total_investment_x, 
+        # ... (Other parameters)
+    ): Initializes the OnePipeline class with parameters for simulating and evaluating the AMM pool.
+    
+    - run_pipeline(self): Runs the simulation pipeline and generates visualizations of simulation paths and Impermanent Loss (IL) curves.
+    """
+
     def __init__(
         self, 
         pool_fee, 
         amount_x_pool_t0, 
         amount_y_pool_t0, 
         total_investment_x, 
-        #FX_timeseries, 
-        #volume_timeseries,
         max_paths, 
         deposit_split_percentage, 
         predicted_period, 
