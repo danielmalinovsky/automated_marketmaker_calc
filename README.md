@@ -29,7 +29,9 @@ This package is composed of two main sections: `Payoff calculation` and `Simulat
 - `simulation methods` are two main methods used for simulationg AMM input data
     - in below figure represented as V0 and P 
 
-$$ payoff_{rel,t} (V_{0},vol_{x,t},\rho,P_{\frac{x}{y},t} =fee_{rel} (V_{0},vol_{x,t},\rho,P_{\frac{x}{y},t})-IL_{rel} ( P_{\frac{x}{y},t_{0}}  ,P_{\frac{x}{y},t} )-TC_{rel} $$
+$$ payoff_{rel,t} (V_{0},vol_{x,t},\rho,P_{\frac{x}{y},t}) =fee_{rel} (V_{0},vol_{x,t},\rho,P_{\frac{x}{y},t})-IL_{rel} ( P_{\frac{x}{y},t_{0}}  ,P_{\frac{x}{y},t} )-TC_{rel} $$
+
+For further documentation behind payoff calculation, please visit research paper here: [Automated Market Maker – Impermanent Loss in High and Low Volatility Markets](https://vskp.vse.cz/english/91269)
 
 
 # Payoff calculation
