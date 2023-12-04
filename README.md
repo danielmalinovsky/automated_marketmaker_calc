@@ -2,6 +2,10 @@
 ```
 pip install automated_marketmaker_calc
 ```
+alternatively
+```
+git clone https://github.com/danielmalinovsky/automated_marketmaker_calc.git
+```
 
 # Get started
 ```python
