@@ -21,6 +21,9 @@ payoff_calc.pipeline(
 )
 ```
 
+![plot_path](https://github.com/danielmalinovsky/automated_marketmaker_calc/assets/106654319/c56a2fa8-1660-4d28-9685-e7f42648e381)
+
+
 This package is composed of two main sections: `Payoff calculation` and `Simulation methods`.
 - `payoff calculation` is engine for simulating internal dynamics of the AMM and getting returns on deposit
 - `simulation methods` are two main methods used for simulationg AMM input data
