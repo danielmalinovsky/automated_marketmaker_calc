@@ -22,14 +22,16 @@ payoff_calc.pipeline(
 ```
 
 This package is composed of two main sections: `Payoff calculation` and `Simulation methods`.
-- payoff calculation is engine for simulating internal dynamics of the AMM and getting returns on deposit
-- simulation methods are two main methods used for simulationg AMM input data
+- `payoff calculation` is engine for simulating internal dynamics of the AMM and getting returns on deposit
+- `simulation methods` are two main methods used for simulationg AMM input data
 
 # Payoff calculation
 Current payoff calculation is based on following features:
 - uniswap v2
 - stable deposit ratio (no withdrawals during simulation period)
 - stable fee split (fees collected in token y and x are split in same ratio at the end of each period
+
+Payoff method is able to take time series data of exchange rates and exchange volumes. Advanced quantitative analyst are welcome to use more advanced simulation mathods, as GARCH, SABR or cointegration simulation methods to simulate exchange rate and volumes together. Payoff results will be only as good as presented simulation data. Howeve goal of this package is to provide robust AMM engine to calculate payoffs and not simulation of financial time series.
 
 ## Automated Market Maker (AMM) Payoff Calculator
 
@@ -98,7 +100,14 @@ The `Visualisation` class provides methods for generating 3D visualizations of s
 - `path_plot(self)`: Generates a 3D plot of simulation paths, displaying price levels, days, and returns.
 - `endpoint_plot(self, IL_curve_x_range=[], IL_curve_y_offset=[])`: Generates a 3D plot of simulation paths with an overlay of an IL curve.
 
-# Supported simulation techniques
+# Supported simulation methods
+Current simulation methods are limited to Geometric Brownian Motion (GBM) and Ornstein-Uhlenbeck Process (UOP). Simulation of exchange rate and volume data having these assumptions:
+- Exchange rate and exchange volume are independent
+- Exchange rate follows GBM
+- Exchange volume follows OUP
+- Volatility is stable for both exchange rate and volume
+
+These simulation methods are meant as simple proof of concept for the sake of functionality of the payoff method. More advanced approaches for time series simulation are highly recommended.
 
 ## Geometric Brownian Motion (GBM) for Price Data
 
