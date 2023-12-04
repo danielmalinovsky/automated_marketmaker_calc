@@ -100,6 +100,12 @@ The `Visualisation` class provides methods for generating 3D visualizations of s
 - `path_plot(self)`: Generates a 3D plot of simulation paths, displaying price levels, days, and returns.
 - `endpoint_plot(self, IL_curve_x_range=[], IL_curve_y_offset=[])`: Generates a 3D plot of simulation paths with an overlay of an IL curve.
 
+#### Visualisatoin examples:
+
+![plot_path](https://github.com/danielmalinovsky/automated_marketmaker_calc/assets/106654319/c56a2fa8-1660-4d28-9685-e7f42648e381)
+![plot_endpoint](https://github.com/danielmalinovsky/automated_marketmaker_calc/assets/106654319/c5e1db98-5bb0-4a45-a575-3d5e08f59741)
+
+
 # Supported simulation methods
 Current simulation methods are limited to Geometric Brownian Motion (GBM) and Ornstein-Uhlenbeck Process (UOP). Simulation of exchange rate and volume data having these assumptions:
 - Exchange rate and exchange volume are independent
