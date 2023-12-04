@@ -29,7 +29,7 @@ This package is composed of two main sections: `Payoff calculation` and `Simulat
 - `simulation methods` are two main methods used for simulationg AMM input data
     - in below figure represented as V0 and P 
 
-$$ payoff_(rel,t) (V_0,vol_(x,t),ρ,P_(x/y,t ) )=fee_rel (V_0,vol_(x,t),ρ,P_(x/y,t ) )-IL_rel ( P_(x/y,t_0  ),P_(x/y,t ) )-TC_rel!$$
+$$ payoff_{rel,t} (V_{0},vol_{x,t},\rho,P_{\frac{x}{y},t} =fee_{rel} (V_{0},vol_{x,t},\rho,P_{\frac{x}{y},t})-IL_{rel} ( P_{\frac{x}{y},t_{0}}  ,P_{\frac{x}{y},t} )-TC_{rel} $$
 
 
 # Payoff calculation
