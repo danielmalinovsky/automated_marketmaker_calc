@@ -29,7 +29,7 @@ This package is composed of two main sections: `Payoff calculation` and `Simulat
 - `simulation methods` are two main methods used for simulationg AMM input data
     - in below figure represented as V0 and P 
 
-payoff_(rel,t) (V_0,vol_(x,t),ρ,P_(x/y,t ) )=fee_rel (V_0,vol_(x,t),ρ,P_(x/y,t ) )-IL_rel ( P_(x/y,t_0  ),P_(x/y,t ) )-TC_rel![image](https://github.com/danielmalinovsky/automated_marketmaker_calc/assets/106654319/2e3e2411-69b7-41b5-8232-ef82f912c053)
+$$ payoff_(rel,t) (V_0,vol_(x,t),ρ,P_(x/y,t ) )=fee_rel (V_0,vol_(x,t),ρ,P_(x/y,t ) )-IL_rel ( P_(x/y,t_0  ),P_(x/y,t ) )-TC_rel!$$
 
 
 # Payoff calculation
