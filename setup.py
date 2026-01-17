@@ -31,5 +31,5 @@ setup(
     ],
     packages=find_packages(include=["automated_marketmaker_calc"]),
     include_package_data=True,
-    install_requires=["numpy", "pandas", "math", "matplotlib.pyplot", "statistics", "IPython.display", "time", "datetime", "mpl_toolkits"]
+    install_requires=["numpy", "pandas", "matplotlib", "statistics", "IPython"]
 )

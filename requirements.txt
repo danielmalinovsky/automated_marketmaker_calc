@@ -1,9 +1,5 @@
 pandas
 numpy
-math
-matplotlib.pyplot
+matplotlib
 statistics
-IPython.display
-time
-datetime
-mpl_toolkits
+IPython
