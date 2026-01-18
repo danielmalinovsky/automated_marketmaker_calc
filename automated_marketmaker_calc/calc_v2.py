@@ -1,3 +1,4 @@
+# from typing import Dict, List, Optional, Tuple, Union
 import pandas as pd
 import numpy as np
 import math
@@ -11,6 +12,125 @@ import warnings
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings('ignore')
+
+class StochasticPlotter:
+    """Utility class for plotting stochastic processes."""
+    
+    @staticmethod
+    def plot_process_paths(sim_df: pd.DataFrame, predicted_period: int, 
+                          backtesting: bool = False, 
+                          process_type: str = 'GBM',
+                          mu: float = None, sigma: float = None,
+                          theta: float = None, S0: float = None) -> None:
+        """
+        Unified plotting function for stochastic processes.
+        
+        Args:
+            sim_df: DataFrame with simulated paths
+            predicted_period: Number of periods predicted
+            backtesting: Whether this is a backtest
+            process_type: 'GBM' or 'OUP'
+            mu, sigma, theta: Process parameters
+            S0: Starting value
+        """
+        if S0 is None:
+            S0 = sim_df.iloc[0, 0] if not sim_df.empty else 0
+        
+        # Create time arrays
+        if backtesting:
+            time_space = np.linspace(0, 1, predicted_period + 1)
+            plot_df = sim_df
+        else:
+            time_space = np.linspace(0, 1, 2 * predicted_period + 1)
+            df_nan = pd.DataFrame(np.nan, index=range(predicted_period), 
+                                 columns=range(len(sim_df.columns)))
+            plot_df = pd.concat([df_nan, sim_df]).reset_index(drop=True)
+        
+        # Calculate statistics
+        mean_path = plot_df.mean(axis=1)
+        median_path = plot_df.median(axis=1)
+        confidence_95 = np.percentile(plot_df.values, 95, axis=1)
+        confidence_05 = np.percentile(plot_df.values, 5, axis=1)
+        
+        # Create figure
+        fig, axes = plt.subplots(2, 1, figsize=(14, 10), 
+                                 gridspec_kw={'height_ratios': [3, 1]})
+        
+        # --- Top plot: Paths ---
+        # Plot confidence intervals
+        axes[0].fill_between(time_space[:len(plot_df)], confidence_05, confidence_95, 
+                            alpha=0.2, color='skyblue', label='90% Confidence Interval')
+        
+        # Plot individual paths
+        axes[0].plot(time_space[:len(plot_df)], plot_df.values, alpha=0.1, 
+                    color='blue', linewidth=0.3)
+        
+        # Plot mean and median
+        axes[0].plot(time_space[:len(plot_df)], mean_path, 'k-', linewidth=3, 
+                    label='Mean path')
+        axes[0].plot(time_space[:len(plot_df)], median_path, 'r--', linewidth=2, 
+                    label='Median path')
+        
+        # Process-specific elements
+        if process_type == 'GBM':
+            axes[0].axhline(y=S0, color='g', linestyle=':', linewidth=2, 
+                           label=f'S₀ = {S0:.2f}')
+            # Theoretical mean for GBM
+            if mu is not None:
+                theoretical_mean = S0 * np.exp(mu * time_space[:len(plot_df)])
+                axes[0].plot(time_space[:len(plot_df)], theoretical_mean, 'm:', 
+                            linewidth=2, label=f'S₀exp(μt)')
+            
+        elif process_type == 'OUP':
+            if mu is not None:
+                axes[0].axhline(y=mu, color='orange', linestyle='--', linewidth=2, 
+                               label=f'Long-term mean (μ) = {mu:.2f}')
+            axes[0].axhline(y=S0, color='g', linestyle=':', linewidth=2, 
+                           label=f'V₀ = {S0:.2f}')
+        
+        # Add vertical separator for future predictions
+        if not backtesting:
+            axes[0].axvline(x=0.5, color='gray', linestyle=':', linewidth=2)
+            axes[0].text(0.51, axes[0].get_ylim()[0] + 0.05 * 
+                        (axes[0].get_ylim()[1] - axes[0].get_ylim()[0]), 
+                        'Future', rotation=90, verticalalignment='bottom')
+        
+        # Titles and labels
+        if process_type == 'GBM':
+            eqn = f"$dS_t = \mu S_t dt + \sigma S_t dW_t$"
+            params = f"$S_0 = {S0:.4f}, \mu = {mu:.4f}, \sigma = {sigma:.4f}$"
+        else:  # OUP
+            eqn = f"$dV_t = \\theta(\mu - V_t)dt + \sigma dW_t$"
+            params = f"$V_0 = {S0:.2f}, \mu = {mu:.2f}, \sigma = {sigma:.2f}, \\theta = {theta:.2f}$"
+        
+        axes[0].set_title(f"{process_type} Process Simulation\n{eqn}\n{params}", 
+                         fontsize=14, pad=20)
+        axes[0].set_ylabel(f"{'Price' if process_type == 'GBM' else 'Volume'} $(S_t)$", 
+                          fontsize=12)
+        axes[0].legend(loc='upper left', fontsize=10)
+        axes[0].grid(True, alpha=0.3, linestyle='--')
+        
+        # --- Bottom plot: Distribution at final time ---
+        final_values = sim_df.iloc[-1, :].values
+        axes[1].hist(final_values, bins=50, alpha=0.7, color='steelblue', 
+                    edgecolor='black', density=True)
+        
+        # Add vertical lines for key statistics
+        axes[1].axvline(x=np.mean(final_values), color='red', linestyle='-', 
+                       linewidth=2, label=f'Mean: {np.mean(final_values):.2f}')
+        axes[1].axvline(x=np.median(final_values), color='green', linestyle='--', 
+                       linewidth=2, label=f'Median: {np.median(final_values):.2f}')
+        axes[1].axvline(x=S0, color='orange', linestyle=':', linewidth=2, 
+                       label=f'Initial: {S0:.2f}')
+        
+        axes[1].set_xlabel(f"Final {('Price' if process_type == 'GBM' else 'Volume')} Distribution", 
+                          fontsize=12)
+        axes[1].set_ylabel("Density", fontsize=12)
+        axes[1].legend(fontsize=10)
+        axes[1].grid(True, alpha=0.3, linestyle='--')
+        
+        plt.tight_layout()
+        plt.show()
 
 
 class PriceSim:
@@ -165,38 +285,20 @@ class PriceSim:
         # Return appropriate format
         return pd.DataFrame(St) if pandas == 'Y' else St
 
-    def plot_paths(self, sim_df: pd.DataFrame, FX_df: pd.Series, 
-                  predicted_period: int, backtesting: bool = False) -> None:
-        """Plot GBM paths."""
-        # Store parameters for title
-        self.S0 = sim_df.iloc[0, 0] if not sim_df.empty else 0
-        
-        # Create time arrays
-        if backtesting:
-            time_space = np.linspace(0, 1, predicted_period + 1)
-            plot_df = sim_df
-        else:
-            time_space = np.linspace(0, 1, 2 * predicted_period + 1)
-            # Create NaN DataFrame and concatenate
-            df_nan = pd.DataFrame(np.nan, index=range(predicted_period), 
-                                 columns=range(len(sim_df.columns)))
-            plot_df = pd.concat([df_nan, sim_df]).reset_index(drop=True)
-        
-        # Create time matrix for plotting
-        tt = np.full((10000, len(time_space)), time_space).T
-        
-        # Plot
-        plt.figure(figsize=(8, 5))
-        plt.plot(tt[:len(plot_df)], plot_df.values)
-        plt.xlabel("Years $(t)$")
-        plt.ylabel("Exchange Rate $(S_t)$")
-        plt.title(f"Realizations of Geometric Brownian Motion\n"
-                 f"$dS_t = \mu S_t dt + \sigma S_t dW_t$\n"
-                 f"$S_0 = {self.S0:.6f}, \mu = {self.mu:.6f}, \sigma = {self.sigma:.6f}$")
-        plt.grid(True)
-        plt.show()
+    def unified_plot(self, sim_df: pd.DataFrame, predicted_period: int, 
+               backtesting: bool = False) -> None:
+        """Plot GBM paths using enhanced plotting."""
+        StochasticPlotter.plot_process_paths(
+            sim_df=sim_df,
+            predicted_period=predicted_period,
+            backtesting=backtesting,
+            process_type='GBM',
+            mu=self.mu,
+            sigma=self.sigma,
+            S0=sim_df.iloc[0, 0] if not sim_df.empty else 0
+        )
 
-    def pipeline(self, predicted_period: int, FX_data: pd.DataFrame = pd.DataFrame(),
+    def pipeline(self, predicted_period: int, FX_data: pd.DataFrame = pd.DataFrame(), n_paths: int = 10000,
                 ticker: str = '', start_date: List[int] = [], 
                 end_date: Union[List[int], str] = [], interval: str = '',
                 backtesting: bool = True, plot_sim: bool = False) -> None:
@@ -248,7 +350,7 @@ class PriceSim:
         S0 = self.FX_data.at[start_idx, 'Adj Close']
         
         # Scale parameters for prediction period
-        mu_scaled = self.mu * np.sqrt(predicted_period)
+        mu_scaled = self.mu * predicted_period
         sigma_scaled = self.sigma * np.sqrt(predicted_period)
         
         # Run simulation
@@ -257,19 +359,21 @@ class PriceSim:
             sigma=sigma_scaled,
             S0=S0,
             steps=predicted_period,
-            n_paths=10000,
+            n_paths=n_paths,
             plot='N',
             pandas='Y'
         )
         
         # Plot if requested
         if plot_sim:
-            self.plot_paths(
+
+            self.unified_plot(
                 sim_df=self.sim,
-                FX_df=self.FX_data['Adj Close'],
                 predicted_period=predicted_period,
                 backtesting=backtesting
             )
+
+        return self.sim
 
 
 class VolumeSim:
@@ -287,7 +391,7 @@ class VolumeSim:
     log_returnify = PriceSim.log_returnify
     GBM_params = PriceSim.GBM_params
     GBM = PriceSim.GBM
-    plot_paths = PriceSim.plot_paths  # ← ADD THIS LINE
+    unified_plot = PriceSim.unified_plot
 
 
     def UOP(self, mu: float, sigma: float, theta: float, S0: float, 
@@ -329,8 +433,22 @@ class VolumeSim:
         # Return appropriate format
         return pd.DataFrame(paths.T) if pandas == 'Y' else paths.T
 
-    def pipeline(self, volume: pd.Series, predicted_period: int, 
-                backtesting: bool = True) -> pd.DataFrame:
+    def unified_plot(self, sim_df: pd.DataFrame, predicted_period: int, 
+                   backtesting: bool = False) -> None:
+        """Plot UOP paths using enhanced plotting."""
+        StochasticPlotter.plot_process_paths(
+            sim_df=sim_df,
+            predicted_period=predicted_period,
+            backtesting=backtesting,
+            process_type='OUP',
+            mu=self.mu,
+            sigma=self.sigma,
+            theta=self.theta,
+            S0=sim_df.iloc[0, 0] if not sim_df.empty else 0
+        )
+
+    def pipeline(self, volume: pd.Series, theta: float, predicted_period: int, n_paths: int = 10000,
+                backtesting: bool = True, plot_sim: bool = False) -> pd.DataFrame:
         """
         Execute UOP simulation pipeline.
         
@@ -347,14 +465,20 @@ class VolumeSim:
         
         # Calculate parameters from volume data (not returns as in original)
         # Original code used volume directly, not returns
-        self.mu = np.mean(volume.values)
-        self.sigma = np.std(volume.values, ddof=1)
-        self.theta = 5.0  # Fixed as in original code
+        self.theta = theta
+        self.mu, self.sigma = self.GBM_params(volume)
+        # self.mu = np.mean(volume.values)
+        # self.sigma = np.std(volume.values, ddof=1)
         
         # Determine starting value
         if backtesting:
+            # For backtesting: we simulate the historical period
+            # Start from predicted_period+1 steps before the end
             start_idx = len(volume) - predicted_period - 1
+            if start_idx < 0:
+                raise ValueError(f"Not enough data for backtesting. Need at least {predicted_period + 1} points.")
         else:
+            # For forecasting: start from the last available data point
             start_idx = len(volume) - 1
         
         if start_idx < 0 or start_idx >= len(volume):
@@ -369,79 +493,31 @@ class VolumeSim:
             theta=self.theta,
             S0=S0,
             steps=predicted_period,
-            n_paths=10000,
+            n_paths=n_paths,
             plot='N',
             pandas='Y'
         )
         
+        # Add plotting option
+        if plot_sim:
+            self.unified_plot(
+                sim_df=self.sim,
+                predicted_period=predicted_period,
+                backtesting=backtesting
+            )
+        
         return self.sim
 
-    def plot_UOP_paths(self, sim_df: pd.DataFrame, predicted_period: int, 
-                      backtesting: bool = False) -> None:
-        """
-        Plot Ornstein-Uhlenbeck Process paths from simulation results.
-        
-        Args:
-            sim_df: DataFrame with simulated paths (columns are paths, rows are time steps)
-            predicted_period: Number of periods predicted
-            backtesting: Whether this is a backtest
-        """
-        # Store parameters for title
-        S0 = sim_df.iloc[0, 0] if not sim_df.empty else 0
-        
-        # Create time arrays
-        if backtesting:
-            time_space = np.linspace(0, 1, predicted_period + 1)
-            plot_df = sim_df
-        else:
-            time_space = np.linspace(0, 1, 2 * predicted_period + 1)
-            # Create NaN DataFrame for historical part
-            df_nan = pd.DataFrame(np.nan, index=range(predicted_period), 
-                                 columns=range(len(sim_df.columns)))
-            plot_df = pd.concat([df_nan, sim_df]).reset_index(drop=True)
-        
-        plt.figure(figsize=(10, 6))
-        
-        # Plot all paths
-        plt.plot(time_space[:len(plot_df)], plot_df.values, alpha=0.5, linewidth=0.5)
-        
-        # Calculate and plot mean path
-        mean_path = plot_df.mean(axis=1)
-        plt.plot(time_space[:len(plot_df)], mean_path, 'k-', linewidth=2, label='Mean path')
-        
-        # Add long-term mean line
-        plt.axhline(y=self.mu, color='r', linestyle='--', 
-                   linewidth=2, label=f'Long-term mean (μ) = {self.mu:.2f}')
-        
-        # Add starting value
-        plt.axhline(y=S0, color='g', linestyle=':', 
-                   linewidth=1.5, label=f'Starting value (V₀) = {S0:.2f}')
-        
-        # Add vertical line separating historical and future (if not backtesting)
-        if not backtesting:
-            plt.axvline(x=0.5, color='gray', linestyle=':', linewidth=1.5)
-            plt.text(0.51, plt.ylim()[0] + 0.05 * (plt.ylim()[1] - plt.ylim()[0]), 
-                    'Future', rotation=90, verticalalignment='bottom')
-        
-        plt.xlabel("Time $(t)$")
-        plt.ylabel("Volume $(V_t)$")
-        plt.title(f"Ornstein-Uhlenbeck Process Simulation\n"
-                 f"$dV_t = \\theta(\\mu - V_t)dt + \\sigma dW_t$\n"
-                 f"$V_0 = {S0:.2f}, \\mu = {self.mu:.2f}, \\sigma = {self.sigma:.2f}, \\theta = {self.theta:.2f}$")
-        plt.legend(loc='upper right')
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        plt.show()
 
 class Payoff:
     """
-    Optimized Payoff class for AMM calculations.
+    Optimized Payoff class for AMM calculations with volume-arbitrage decomposition.
     
     Changes made:
-    1. Added type hints
-    2. Optimized calculations using vectorized operations where possible
-    3. Improved error handling
-    4. Removed redundant intermediate variables
+    1. Added volume-arbitrage decomposition logic
+    2. Added path filtering based on volume sufficiency
+    3. Added detailed fee allocation based on arbitrage direction
+    4. Added logging for dropped paths
     """
     
     def __init__(self):
@@ -460,6 +536,114 @@ class Payoff:
         )
         self.paths_df = pd.DataFrame()
         
+        # New attributes for volume-arbitrage decomposition
+        self.volume_decomposition = pd.DataFrame(
+            columns=['V_total', 'V_required', 'V_excess', 'dropped']
+        )
+        self.dropped_paths_count = 0
+        self.dropped_paths_log = []
+        
+    # ========== Volume-Arbitrage Decomposition Methods ==========
+    
+    @staticmethod
+    def calculate_volume_required(x0: float, P0: float, P1: float) -> float:
+        """
+        Calculate minimum volume required to move price from P0 to P1 in CPAMM.
+        
+        Formula: V_required = x0 * |1 - sqrt(P0 / P1)|
+        
+        Args:
+            x0: Initial amount of token X in pool
+            P0: Initial price (Y/X)
+            P1: Final price (Y/X)
+            
+        Returns:
+            Minimum volume of token X required
+        """
+        if x0 <= 0:
+            return 0.0
+        if P0 <= 0 or P1 <= 0:
+            return np.inf  # Invalid price
+        
+        ratio = P0 / P1
+        if ratio < 0:  # Negative price ratio
+            return np.inf
+
+        return x0 * abs(1 - math.sqrt(ratio))
+    
+    @staticmethod
+    def calculate_volume_excess(V_total: float, V_required: float) -> float:
+        """
+        Calculate excess volume after arbitrage.
+        
+        Args:
+            V_total: Total daily volume
+            V_required: Minimum volume required for price move
+            
+        Returns:
+            Excess volume (V_total - V_required)
+        """
+        return max(0, V_total - V_required)
+    
+    @staticmethod
+    def calculate_fee_allocation(V_excess: float, V_required: float, 
+                                P0: float, P1: float, fee_rate: float) -> Tuple[float, float]:
+        """
+        Calculate fee allocation between X and Y based on arbitrage direction.
+        
+        For price increases (P1 > P0): arbitrage sells Y, so V_required fees accrue in Y
+        For price decreases (P1 < P0): arbitrage sells X, so V_required fees accrue in X
+        Excess volume V_excess assumes balanced flow, fees split 50/50
+        
+        Args:
+            V_excess: Excess volume
+            V_required: Arbitrage volume
+            P0: Initial price
+            P1: Final price
+            fee_rate: Pool fee rate
+            
+        Returns:
+            Tuple of (fees_in_x, fees_in_y)
+        """
+        if P1 > P0:  # Price increase: arbitrage sells Y
+            fees_in_x = 0.5 * V_excess * fee_rate
+            fees_in_y = (0.5 * V_excess + V_required) * fee_rate / P1
+        else:  # Price decrease: arbitrage sells X
+            fees_in_x = (0.5 * V_excess + V_required) * fee_rate
+            fees_in_y = 0.5 * V_excess * fee_rate / P1
+
+        
+        return fees_in_x, fees_in_y
+    
+    def check_volume_sufficiency(self, V_total: float, V_required: float, 
+                                tolerance: float = 1e-10) -> bool:
+        """
+        Check if total volume is sufficient for the price move.
+        
+        Args:
+            V_total: Total daily volume
+            V_required: Minimum volume required
+            tolerance: Numerical tolerance
+            
+        Returns:
+            True if V_total >= V_required, False otherwise
+        """
+        return V_total >= V_required - tolerance
+    
+    def log_dropped_path(self, path_idx: int, time_step: int, 
+                        V_total: float, V_required: float, P0: float, P1: float):
+        """Log information about dropped paths."""
+        self.dropped_paths_count += 1
+        self.dropped_paths_log.append({
+            'path': path_idx,
+            'time_step': time_step,
+            'V_total': V_total,
+            'V_required': V_required,
+            'deficit': V_required - V_total,
+            'P0': P0,
+            'P1': P1
+        })
+    
     # ========== Core Calculation Methods ==========
     
     @staticmethod
@@ -551,16 +735,54 @@ class Payoff:
         else:
             raise ValueError(f"Invalid quote type: {quote_type}")
     
-    @staticmethod
-    def fee_amount_by_reserves(FX_in_x: float, volume_in_x: float, 
-                              fee_rate: float) -> Tuple[float, float]:
-        """Calculate fee amounts from reserves."""
-        if FX_in_x == 0:
+    def fee_amount_by_reserves(self, FX_in_x: float, V_total: float, 
+                              fee_rate: float, x0: float = None,
+                              P0: float = None, P1: float = None,
+                              use_decomposition: bool = False) -> Tuple[float, float]:
+        """
+        Calculate fee amounts from reserves with optional volume decomposition.
+        
+        Args:
+            FX_in_x: Current exchange rate
+            V_total: Total volume in X terms
+            fee_rate: Pool fee rate
+            x0: Initial X reserves (required if use_decomposition=True)
+            P0: Initial price (required if use_decomposition=True)
+            P1: Current price (required if use_decomposition=True)
+            use_decomposition: Whether to use volume-arbitrage decomposition
+            
+        Returns:
+            Tuple of (x_fee_amount, y_fee_amount)
+        """
+        if abs(FX_in_x) < 1e-10: # Prevent division by zero or values too close to zero
             return 0.0, 0.0
         
-        y_amount_exchanged = volume_in_x / FX_in_x
-        x_fee_amount = volume_in_x / 2 * fee_rate
-        y_fee_amount = y_amount_exchanged / 2 * fee_rate
+        if not use_decomposition or x0 is None or P0 is None or P1 is None:
+            # Original calculation (balanced flow assumption)
+            y_amount_exchanged = V_total / FX_in_x
+            x_fee_amount = V_total / 2 * fee_rate
+            y_fee_amount = y_amount_exchanged / 2 * fee_rate
+            return x_fee_amount, y_fee_amount
+        
+        # Use volume-arbitrage decomposition
+        V_required = self.calculate_volume_required(x0, P0, P1)
+        V_excess = self.calculate_volume_excess(V_total, V_required)
+        
+        # Check if volume is sufficient
+        if not self.check_volume_sufficiency(V_total, V_required):
+            # Insufficient volume - this path would be dropped
+            # Return minimal fees as if only arbitrage happened
+            if P1 > P0:
+                x_fee_amount = 0
+                y_fee_amount = V_required * fee_rate / P1
+            else:
+                x_fee_amount = V_required * fee_rate
+                y_fee_amount = 0
+        else:
+            # Sufficient volume - use decomposition model
+            x_fee_amount, y_fee_amount = self.calculate_fee_allocation(
+                V_excess, V_required, P0, P1, fee_rate
+            )
         
         return x_fee_amount, y_fee_amount
     
@@ -598,7 +820,7 @@ class Payoff:
         
         return x1, x2
     
-    # ========== Time Step Calculations ==========
+    # ========== Enhanced Time Step Calculations ==========
     
     def t0_calc(self, pool_fee: float, amount_x_pool_t0: float, 
                amount_y_pool_t0: float, total_investment_x: float,
@@ -689,31 +911,99 @@ class Payoff:
             self.depositor_reserves.at[0, 'amount_y'],
             self.pool_performance.at[0, 'FX']
         )
+        
+        # Initialize volume decomposition tracking
+        self.volume_decomposition.at[0, 'V_total'] = 0.0
+        self.volume_decomposition.at[0, 'V_required'] = 0.0
+        self.volume_decomposition.at[0, 'V_excess'] = 0.0
+        self.volume_decomposition.at[0, 'dropped'] = False
     
     def tn_calc(self, FX_timeseries: pd.DataFrame, volume_timeseries: pd.DataFrame, 
-               max_paths: int) -> None:
-        """Calculate subsequent time steps."""
-        self.paths_df = pd.DataFrame()
-        n_steps = len(FX_timeseries)
+               max_paths: int, use_volume_decomposition: bool = False,
+               drop_insufficient_volume: bool = False) -> None:
+        """
+        Calculate subsequent time steps with optional volume decomposition.
         
+        Args:
+            FX_timeseries: DataFrame with FX paths
+            volume_timeseries: DataFrame with volume paths
+            max_paths: Maximum number of paths to process
+            use_volume_decomposition: Whether to use volume-arbitrage decomposition
+            drop_insufficient_volume: Whether to drop paths with insufficient volume
+        """
+        self.paths_df = pd.DataFrame()
+        self.dropped_paths_count = 0
+        self.dropped_paths_log = []
+        n_steps = len(FX_timeseries)
+        paths_list = []
+        
+        n_steps = min(len(FX_timeseries), len(volume_timeseries))
+
+        # Ensure all DataFrames have the correct integer index
+        n_steps = len(FX_timeseries)
+        self.pool_performance = self.pool_performance.reindex(range(n_steps))
+        self.pool_reserves = self.pool_reserves.reindex(range(n_steps))
+        self.depositor_reserves = self.depositor_reserves.reindex(range(n_steps))
+        self.depositor_performance = self.depositor_performance.reindex(range(n_steps))
+        self.volume_decomposition = self.volume_decomposition.reindex(range(n_steps))
+
         for j in range(max_paths):
             # Skip if column doesn't exist
             if j >= len(FX_timeseries.columns):
                 continue
-                
+            
+            # Reset data structures for this path
+            self.pool_reserves = self.pool_reserves.iloc[0:1].copy().reset_index(drop=True)
+            self.depositor_reserves = self.depositor_reserves.iloc[0:1].copy().reset_index(drop=True)
+            self.depositor_performance = self.depositor_performance.iloc[0:1].copy().reset_index(drop=True)
+            self.pool_performance = self.pool_performance.iloc[0:1].copy().reset_index(drop=True)
+            self.volume_decomposition = self.volume_decomposition.iloc[0:1].copy().reset_index(drop=True)
+            
+            # Track if this path should be dropped
+            drop_this_path = False
+            
             for i in range(1, n_steps):
                 # Skip if data is missing
                 if pd.isna(FX_timeseries.iloc[i, j]) or pd.isna(volume_timeseries.iloc[i, j]):
                     continue
                 
-                # Copy previous fee and get current FX and volume
+                # Get previous and current values
+                prev_FX = self.pool_performance.at[i-1, 'FX']
+                current_FX = FX_timeseries.iloc[i, j]
+                V_total = volume_timeseries.iloc[i, j]
+                
+                # Calculate volume decomposition if requested
+                V_required = 0.0
+                V_excess = 0.0
+                fee_rate = self.pool_performance.at[i, 'pool_fee']
+
+
+                if use_volume_decomposition:
+                    # Get initial X reserves for volume calculation
+                    x0 = self.pool_reserves.at[i-1, 'amount_x']
+                    V_required = self.calculate_volume_required(x0, prev_FX, current_FX)
+                    
+                    # Check volume sufficiency
+                    if drop_insufficient_volume and not self.check_volume_sufficiency(V_total, V_required):
+                        self.log_dropped_path(j, i, V_total, V_required, prev_FX, current_FX)
+                        drop_this_path = True
+                        x_fee, y_fee = self.calculate_fee_allocation(0, V_required, prev_FX, current_FX, fee_rate)
+                    
+                    V_excess = self.calculate_volume_excess(V_total, V_required)
+                    
+                    # Store decomposition results
+                    self.volume_decomposition.at[i, 'V_total'] = V_total
+                    self.volume_decomposition.at[i, 'V_required'] = V_required
+                    self.volume_decomposition.at[i, 'V_excess'] = V_excess
+                    self.volume_decomposition.at[i, 'dropped'] = False
+                
+                # Copy previous fee and set current FX and volume
                 self.pool_performance.at[i, 'pool_fee'] = self.pool_performance.at[i-1, 'pool_fee']
-                self.pool_performance.at[i, 'FX'] = FX_timeseries.iloc[i, j]
-                self.pool_performance.at[i, 'volume'] = volume_timeseries.iloc[i, j]
+                self.pool_performance.at[i, 'FX'] = current_FX
+                self.pool_performance.at[i, 'volume'] = V_total
                 
                 # Calculate new reserves based on FX change
                 prev_k = self.pool_reserves.at[i-1, 'k']
-                current_FX = self.pool_performance.at[i, 'FX']
                 
                 self.pool_reserves.at[i, 'amount_x'] = self.reserves_calc(
                     prev_k, current_FX, calculate_x=True
@@ -722,10 +1012,23 @@ class Payoff:
                     prev_k, current_FX, calculate_x=False
                 )
                 
-                # Calculate fees from volume
-                volume = self.pool_performance.at[i, 'volume']
+                # Calculate fees
                 fee_rate = self.pool_performance.at[i, 'pool_fee']
-                x_fee, y_fee = self.fee_amount_by_reserves(current_FX, volume, fee_rate)
+                
+                if use_volume_decomposition:
+                    # Use decomposition-based fee calculation
+                    x_fee, y_fee = self.calculate_fee_allocation(
+                        V_excess, V_required, prev_FX, current_FX, fee_rate
+                    )
+                else:
+                    # Use original fee calculation
+                    x_fee, y_fee = self.fee_amount_by_reserves(
+                        current_FX, V_total, fee_rate,
+                        x0=self.pool_reserves.at[0, 'amount_x'] if use_volume_decomposition else None,
+                        P0=prev_FX if use_volume_decomposition else None,
+                        P1=current_FX if use_volume_decomposition else None,
+                        use_decomposition=use_volume_decomposition
+                    )
                 
                 self.pool_reserves.at[i, 'x_fee'] = abs(x_fee)
                 self.pool_reserves.at[i, 'y_fee'] = abs(y_fee)
@@ -793,6 +1096,10 @@ class Payoff:
                     current_FX
                 )
             
+            # Skip if path was dropped
+            if drop_this_path:
+                continue
+            
             # Create merged DataFrame for this path
             merge_df = pd.concat([
                 self.pool_performance,
@@ -801,21 +1108,62 @@ class Payoff:
                 self.depositor_reserves.add_suffix('_depositor')
             ], axis=1).fillna(0)
             
+            # Add volume decomposition if used
+            if use_volume_decomposition:
+                merge_df = pd.concat([merge_df, self.volume_decomposition.add_suffix('_vol')], axis=1)
+            
             # Store in paths DataFrame
             time_step_df = pd.DataFrame({'sim': [j], 'dfs': [merge_df.copy()]})
-            self.paths_df = pd.concat([self.paths_df, time_step_df], ignore_index=True)
+            paths_list.append(time_step_df)
+            # self.paths_df = pd.concat([self.paths_df, time_step_df], ignore_index=True)
             
             # Progress update
             if (j + 1) % 10 == 0 or j == max_paths - 1:
                 clear_output(wait=True)
                 print(f"Progress: {j+1}/{max_paths} paths processed")
+                if self.dropped_paths_count > 0:
+                    print(f"Dropped paths: {self.dropped_paths_count}")
+        
+        self.paths_df = pd.concat(paths_list, ignore_index=True)
+
+        # Final summary
+        print(f"\nProcessing complete. Total paths: {len(self.paths_df)}")
+        if self.dropped_paths_count > 0:
+            print(f"Total dropped paths: {self.dropped_paths_count}")
+            print("\nDropped paths summary:")
+            for log in self.dropped_paths_log[:5]:  # Show first 5
+                print(f"  Path {log['path']}, Step {log['time_step']}: "
+                      f"V_total={log['V_total']:.2f}, V_required={log['V_required']:.2f}, "
+                      f"deficit={log['deficit']:.2f}")
+            if len(self.dropped_paths_log) > 5:
+                print(f"  ... and {len(self.dropped_paths_log) - 5} more")
+    
+    # ========== Analysis Methods ==========
+    
+    def get_volume_decomposition_summary(self) -> pd.DataFrame:
+        """Get summary statistics of volume decomposition."""
+        if self.volume_decomposition.empty:
+            return pd.DataFrame()
+        
+        return pd.DataFrame({
+            'Mean V_total': [self.volume_decomposition['V_total'].mean()],
+            'Mean V_required': [self.volume_decomposition['V_required'].mean()],
+            'Mean V_excess': [self.volume_decomposition['V_excess'].mean()],
+            'V_excess/V_total ratio': [
+                self.volume_decomposition['V_excess'].sum() / 
+                max(self.volume_decomposition['V_total'].sum(), 1e-10)
+            ],
+            'Dropped paths': [self.dropped_paths_count]
+        })
     
     # ========== Pipeline Method ==========
     
     def pipeline(self, pool_fee: float, amount_x_pool_t0: float, 
                 amount_y_pool_t0: float, total_investment_x: float,
                 FX_timeseries: pd.DataFrame, volume_timeseries: pd.DataFrame, 
-                max_paths: int, deposit_split_percentage: float) -> None:
+                max_paths: int, deposit_split_percentage: float,
+                use_volume_decomposition: bool = False,
+                drop_insufficient_volume: bool = False) -> None:
         """Execute complete payoff calculation pipeline."""
         self.deposit_split_percentage = deposit_split_percentage
         
@@ -832,17 +1180,20 @@ class Payoff:
         self.tn_calc(
             FX_timeseries=FX_timeseries,
             volume_timeseries=volume_timeseries,
-            max_paths=min(max_paths, len(FX_timeseries.columns))
+            max_paths=min(max_paths, len(FX_timeseries.columns)),
+            use_volume_decomposition=use_volume_decomposition,
+            drop_insufficient_volume=drop_insufficient_volume
         )
 
 
 class Analytics:
     """
-    Optimized analytics class.
+    Optimized analytics class with volume decomposition support.
     
     Changes:
     1. Vectorized endpoint calculation
     2. Better memory efficiency
+    3. Added volume decomposition metrics
     """
     
     def __init__(self, paths_df: pd.DataFrame):
@@ -873,6 +1224,11 @@ class Analytics:
                 'path_id': j
             })
             
+            # Add volume decomposition metrics if available
+            vol_cols = [col for col in path_data.columns if 'vol' in col]
+            for col in vol_cols:
+                endpoint_row[col] = path_data.iloc[-1][col]
+            
             endpoints.append(endpoint_row)
         
         return pd.DataFrame(endpoints)
@@ -882,28 +1238,72 @@ class Analytics:
         if self.endpoint_df.empty:
             return pd.DataFrame()
         
+        # Standard statistics columns
         stats_cols = ['cum_II', 'cum_II_netto', 'FX']
+        
+        # Add volume decomposition columns if available
+        vol_cols = [col for col in self.endpoint_df.columns 
+                   if 'vol' in col and ('V_total' in col or 'V_required' in col or 'V_excess' in col)]
+        stats_cols.extend(vol_cols)
+        
         available_cols = [col for col in stats_cols if col in self.endpoint_df.columns]
         
         if not available_cols:
             return pd.DataFrame()
         
         return self.endpoint_df[available_cols].describe()
+    
+    def volume_decomposition_stat(self) -> pd.DataFrame:
+        """Calculate detailed statistics for volume decomposition."""
+        if self.endpoint_df.empty:
+            return pd.DataFrame()
+        
+        # Filter volume decomposition columns
+        vol_cols = [col for col in self.endpoint_df.columns if 'vol' in col]
+        
+        if not vol_cols:
+            return pd.DataFrame()
+        
+        vol_df = self.endpoint_df[vol_cols]
+        
+        # Calculate additional statistics
+        stats = vol_df.describe()
+        
+        # Add ratio statistics
+        if 'V_total_vol' in vol_df.columns and 'V_required_vol' in vol_df.columns:
+            total_sum = vol_df['V_total_vol'].sum()
+            required_sum = vol_df['V_required_vol'].sum()
+            excess_sum = vol_df['V_excess_vol'].sum() if 'V_excess_vol' in vol_df.columns else 0
+            
+            ratio_stats = pd.DataFrame({
+                'V_required/V_total': [required_sum / max(total_sum, 1e-10)],
+                'V_excess/V_total': [excess_sum / max(total_sum, 1e-10)],
+                'Total V_required': [required_sum],
+                'Total V_excess': [excess_sum],
+                'Mean sufficiency ratio': [vol_df['V_total_vol'].mean() / max(vol_df['V_required_vol'].mean(), 1e-10)]
+            })
+            
+            stats = pd.concat([stats, ratio_stats], axis=0)
+        
+        return stats
 
 
 class Visualization:
     """
-    Optimized visualization class.
+    Optimized visualization class with volume decomposition support.
     
     Changes:
     1. Reduced redundant calculations
     2. Better plotting efficiency
+    3. Added volume decomposition visualizations
     """
     
-    def __init__(self, paths_df: pd.DataFrame, pool_performance: pd.DataFrame):
+    def __init__(self, paths_df: pd.DataFrame, pool_performance: pd.DataFrame,
+                 dropped_paths_log: List[Dict] = None):
         """Initialize visualization."""
         self.paths_df = paths_df
         self.pool_performance = pool_performance
+        self.dropped_paths_log = dropped_paths_log or []
         self.analytics = Analytics(paths_df)
         self.amm_engine = Payoff()
         
@@ -920,8 +1320,13 @@ class Visualization:
             self.endpoint_y_mean = 0
             self.endpoint_y_std = 0
     
-    def path_plot(self) -> None:
-        """Create 3D plot of simulation paths."""
+    def path_plot(self, show_volume_decomposition: bool = False) -> None:
+        """
+        Create 3D plot of simulation paths.
+        
+        Args:
+            show_volume_decomposition: If True, color paths by volume sufficiency
+        """
         fig = plt.figure(figsize=(18.5, 10.5))
         ax = fig.add_subplot(111, projection='3d')
         
@@ -938,18 +1343,53 @@ class Visualization:
             x = path_data['FX'].values
             z = 1 + path_data['II_netto'].values
             
+            # Determine color based on volume decomposition if requested
+            if show_volume_decomposition and 'V_total_vol' in path_data.columns:
+                # Calculate average volume sufficiency ratio for this path
+                v_total = path_data['V_total_vol'].mean()
+                v_required = path_data['V_required_vol'].mean()
+                if v_required > 0:
+                    sufficiency_ratio = v_total / v_required
+                    # Color code: green for sufficient, red for insufficient
+                    if sufficiency_ratio >= 1:
+                        color = 'green'
+                        alpha = 0.3
+                    else:
+                        color = 'red'
+                        alpha = 0.6
+                else:
+                    color = 'blue'
+                    alpha = 0.5
+            else:
+                color = 'blue'
+                alpha = 0.5
+            
             # Plot path
-            ax.plot(x, y[:len(x)], z, alpha=0.5, linewidth=0.5)
+            ax.plot(x, y[:len(x)], z, alpha=alpha, linewidth=0.5, color=color)
         
         ax.set_xlabel('Price Level')
         ax.set_ylabel('Days')
         ax.set_zlabel('Returns')
-        ax.set_title('Simulation Paths - 3D View')
+        
+        if show_volume_decomposition:
+            ax.set_title('Simulation Paths - Colored by Volume Sufficiency\n'
+                        'Green: Sufficient volume, Red: Insufficient volume')
+        else:
+            ax.set_title('Simulation Paths - 3D View')
+        
         plt.show()
     
     def endpoint_plot(self, IL_curve_x_range: List[float] = None,
-                     IL_curve_y_offset: List[float] = None) -> None:
-        """Create scatter plot of endpoints with IL curve."""
+                     IL_curve_y_offset: List[float] = None,
+                     show_volume_size: bool = False) -> None:
+        """
+        Create scatter plot of endpoints with IL curve.
+        
+        Args:
+            IL_curve_x_range: Range for IL curve calculation
+            IL_curve_y_offset: Vertical offset for IL curve
+            show_volume_size: If True, size points by total volume
+        """
         if self.analytics.endpoint_df.empty:
             print("No endpoint data available")
             return
@@ -980,15 +1420,33 @@ class Visualization:
         fig = plt.figure(figsize=(18.5, 10.5))
         ax = fig.add_subplot(111, projection='3d')
         
-        # Plot endpoints
+        # Prepare scatter plot data
         endpoint_day = len(self.pool_performance) - 1
-        ax.scatter(
+        
+        # Determine point sizes if showing volume size
+        if show_volume_size and 'V_total_vol' in self.analytics.endpoint_df.columns:
+            volumes = self.analytics.endpoint_df['V_total_vol'].values
+            sizes = 10 + 100 * (volumes / max(volumes.max(), 1))
+            color = volumes
+            cmap = 'viridis'
+        else:
+            sizes = 10
+            color = 'blue'
+            cmap = None
+        
+        # Plot endpoints
+        scatter = ax.scatter(
             self.analytics.endpoint_df['FX'],
             np.full(len(self.analytics.endpoint_df), endpoint_day),
             self.analytics.endpoint_df['cum_II_netto'],
             alpha=0.5,
-            s=10
+            s=sizes,
+            c=color,
+            cmap=cmap
         )
+        
+        if show_volume_size and cmap:
+            plt.colorbar(scatter, ax=ax, label='Total Volume')
         
         # Plot IL curve
         ax.plot(
@@ -1003,31 +1461,153 @@ class Visualization:
         ax.set_xlabel('Price Level')
         ax.set_ylabel('Days')
         ax.set_zlabel('Returns')
-        ax.set_title('Endpoint Distribution with IL Curve')
+        
+        title = 'Endpoint Distribution with IL Curve'
+        if show_volume_size:
+            title += ' (Point size proportional to volume)'
+        ax.set_title(title)
+        
         ax.legend()
         plt.show()
+    
+    def volume_decomposition_plot(self) -> None:
+        """Create visualization of volume decomposition analysis."""
+        if self.analytics.endpoint_df.empty:
+            print("No endpoint data available")
+            return
+        
+        # Check if volume decomposition columns exist
+        vol_cols = [col for col in self.analytics.endpoint_df.columns 
+                   if 'vol' in col and ('V_total' in col or 'V_required' in col)]
+        
+        if not vol_cols:
+            print("No volume decomposition data available")
+            return
+        
+        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+        axes = axes.flatten()
+        
+        # Plot 1: Volume decomposition by path
+        if 'V_total_vol' in self.analytics.endpoint_df.columns and 'V_required_vol' in self.analytics.endpoint_df.columns:
+            paths = range(len(self.analytics.endpoint_df))
+            axes[0].bar(paths, self.analytics.endpoint_df['V_total_vol'], 
+                       alpha=0.7, label='Total Volume', color='blue')
+            axes[0].bar(paths, self.analytics.endpoint_df['V_required_vol'], 
+                       alpha=0.7, label='Required Volume', color='orange')
+            axes[0].set_xlabel('Path ID')
+            axes[0].set_ylabel('Volume')
+            axes[0].set_title('Volume Decomposition by Path')
+            axes[0].legend()
+            axes[0].tick_params(axis='x', rotation=45)
+        
+        # Plot 2: Volume sufficiency ratio
+        if 'V_total_vol' in self.analytics.endpoint_df.columns and 'V_required_vol' in self.analytics.endpoint_df.columns:
+            sufficiency_ratio = self.analytics.endpoint_df['V_total_vol'] / \
+                               np.maximum(self.analytics.endpoint_df['V_required_vol'], 1e-10)
+            axes[1].hist(sufficiency_ratio, bins=20, alpha=0.7, color='green', edgecolor='black')
+            axes[1].axvline(x=1, color='red', linestyle='--', linewidth=2, label='Sufficiency Threshold')
+            axes[1].set_xlabel('Volume Sufficiency Ratio (Total/Required)')
+            axes[1].set_ylabel('Frequency')
+            axes[1].set_title('Distribution of Volume Sufficiency Ratios')
+            axes[1].legend()
+        
+        # Plot 3: Returns vs Volume Sufficiency
+        if 'V_total_vol' in self.analytics.endpoint_df.columns and 'V_required_vol' in self.analytics.endpoint_df.columns:
+            sufficiency_ratio = self.analytics.endpoint_df['V_total_vol'] / \
+                               np.maximum(self.analytics.endpoint_df['V_required_vol'], 1e-10)
+            returns = self.analytics.endpoint_df['cum_II_netto']
+            scatter = axes[2].scatter(sufficiency_ratio, returns, 
+                                     c=self.analytics.endpoint_df['FX'], 
+                                     cmap='viridis', alpha=0.6)
+            axes[2].axvline(x=1, color='red', linestyle='--', linewidth=2, 
+                           label='Sufficiency Threshold')
+            axes[2].set_xlabel('Volume Sufficiency Ratio')
+            axes[2].set_ylabel('Cumulative Returns')
+            axes[2].set_title('Returns vs Volume Sufficiency Ratio')
+            axes[2].legend()
+            plt.colorbar(scatter, ax=axes[2], label='Final Price')
+        
+        # Plot 4: Dropped paths analysis (if any)
+        if self.dropped_paths_log:
+            dropped_counts = {}
+            for log in self.dropped_paths_log:
+                path_id = log['path']
+                if path_id not in dropped_counts:
+                    dropped_counts[path_id] = 0
+                dropped_counts[path_id] += 1
+            
+            axes[3].bar(dropped_counts.keys(), dropped_counts.values(), 
+                       color='red', alpha=0.7)
+            axes[3].set_xlabel('Path ID')
+            axes[3].set_ylabel('Number of Dropped Steps')
+            axes[3].set_title('Distribution of Dropped Path Steps')
+            axes[3].tick_params(axis='x', rotation=45)
+        else:
+            axes[3].text(0.5, 0.5, 'No paths were dropped\n(All had sufficient volume)',
+                        ha='center', va='center', fontsize=12)
+            axes[3].set_title('Dropped Paths Analysis')
+        
+        plt.tight_layout()
+        plt.show()
+    
+    def summary_statistics(self) -> None:
+        """Print summary statistics including volume decomposition."""
+        print("=" * 60)
+        print("SIMULATION SUMMARY STATISTICS")
+        print("=" * 60)
+        
+        # Basic endpoint statistics
+        if not self.analytics.endpoint_df.empty:
+            basic_stats = self.analytics.endpoint_stat()
+            print("\n1. Endpoint Statistics:")
+            print(basic_stats)
+        
+        # Volume decomposition statistics
+        vol_stats = self.analytics.volume_decomposition_stat()
+        if not vol_stats.empty:
+            print("\n2. Volume Decomposition Statistics:")
+            print(vol_stats)
+        
+        # Dropped paths information
+        if self.dropped_paths_log:
+            print(f"\n3. Dropped Paths: {len(self.dropped_paths_log)} steps were dropped")
+            print("   First 5 dropped steps:")
+            for i, log in enumerate(self.dropped_paths_log[:5]):
+                print(f"   Step {i+1}: Path {log['path']}, Time {log['time_step']}, "
+                      f"Deficit: {log['deficit']:.2f}")
+            if len(self.dropped_paths_log) > 5:
+                print(f"   ... and {len(self.dropped_paths_log) - 5} more")
+        else:
+            print("\n3. No paths were dropped (all had sufficient volume)")
+        
+        print("=" * 60)
 
 
 class OnePipeline:
     """
-    Optimized single pipeline class.
+    Optimized single pipeline class with volume decomposition support.
     
     Changes:
     1. Better parameter handling
     2. Error checking
     3. More efficient simulation
+    4. Volume decomposition integration
     """
     
     def __init__(self, pool_fee: float, amount_x_pool_t0: float, 
                 amount_y_pool_t0: float, total_investment_x: float,
                 max_paths: int, deposit_split_percentage: float,
                 predicted_period: int, volume: pd.Series,
+                theta: float,
                 captured_volume_perc: float = 1.0,
                 FX_data: pd.DataFrame = pd.DataFrame(),
                 ticker: str = '', start_date: List[int] = None,
                 end_date: Union[List[int], str] = None,
                 interval: str = '', backtesting: bool = True,
-                plot_sim: bool = False):
+                plot_sim: bool = False,
+                use_volume_decomposition: bool = False,
+                drop_insufficient_volume: bool = False,
+                show_volume_plots: bool = True):
         """Initialize and run complete pipeline."""
         
         # Validate inputs
@@ -1036,13 +1616,20 @@ class OnePipeline:
             total_investment_x, max_paths, deposit_split_percentage
         )
         
+        # Store configuration
+        self.use_volume_decomposition = use_volume_decomposition
+        self.drop_insufficient_volume = drop_insufficient_volume
+        self.show_volume_plots = show_volume_plots
+        
         # Initialize components
         self.price = PriceSim()
         self.volume_sim = VolumeSim()
         self.amm = Payoff()
         
         # Run price simulation
-        print("Running price simulation...")
+        print("=" * 60)
+        print("STEP 1: Running price simulation...")
+        print("=" * 60)
         self.price.pipeline(
             predicted_period=predicted_period,
             FX_data=FX_data,
@@ -1055,18 +1642,30 @@ class OnePipeline:
         )
         
         # Run volume simulation
-        print("Running volume simulation...")
+        print("\n" + "=" * 60)
+        print("STEP 2: Running volume simulation...")
+        print("=" * 60)
         volume_sim_result = self.volume_sim.pipeline(
             volume=volume,
+            theta=theta,
             predicted_period=predicted_period,
-            backtesting=backtesting
+            backtesting=backtesting,
+            plot_sim=plot_sim  # Add this if you want plotting
         )
         
         # Adjust volume by captured percentage
         adjusted_volume = volume_sim_result * captured_volume_perc
         
-        # Run AMM payoff calculation
-        print("Running AMM payoff calculation...")
+        # Run AMM payoff calculation with volume decomposition
+        print("\n" + "=" * 60)
+        print("STEP 3: Running AMM payoff calculation...")
+        print("=" * 60)
+        if use_volume_decomposition:
+            print(f"Using volume decomposition: YES")
+            print(f"Dropping insufficient volume paths: {drop_insufficient_volume}")
+        else:
+            print("Using volume decomposition: NO")
+        
         self.amm.pipeline(
             pool_fee=pool_fee,
             amount_x_pool_t0=amount_x_pool_t0,
@@ -1075,20 +1674,41 @@ class OnePipeline:
             FX_timeseries=self.price.sim,
             volume_timeseries=adjusted_volume,
             max_paths=max_paths,
-            deposit_split_percentage=deposit_split_percentage
+            deposit_split_percentage=deposit_split_percentage,
+            use_volume_decomposition=use_volume_decomposition,
+            drop_insufficient_volume=drop_insufficient_volume
         )
         
         # Create visualizations
-        print("Creating visualizations...")
+        print("\n" + "=" * 60)
+        print("STEP 4: Creating visualizations...")
+        print("=" * 60)
+        
         self.plot = Visualization(
             paths_df=self.amm.paths_df,
-            pool_performance=self.amm.pool_performance
+            pool_performance=self.amm.pool_performance,
+            dropped_paths_log=self.amm.dropped_paths_log
         )
         
-        self.plot.path_plot()
-        self.plot.endpoint_plot()
+        # Standard plots
+        print("\n1. Standard 3D path plot...")
+        self.plot.path_plot(show_volume_decomposition=use_volume_decomposition)
         
-        print("Pipeline completed successfully!")
+        print("\n2. Endpoint distribution plot...")
+        self.plot.endpoint_plot(show_volume_size=use_volume_decomposition)
+        
+        # Volume decomposition plots if enabled
+        if use_volume_decomposition and show_volume_plots:
+            print("\n3. Volume decomposition analysis...")
+            self.plot.volume_decomposition_plot()
+        
+        # Print summary statistics
+        print("\n" + "=" * 60)
+        print("FINAL RESULTS")
+        print("=" * 60)
+        self.plot.summary_statistics()
+        
+        print("\nPipeline completed successfully!")
     
     def _validate_inputs(self, pool_fee: float, amount_x_pool_t0: float,
                         amount_y_pool_t0: float, total_investment_x: float,
@@ -1108,18 +1728,61 @@ class OnePipeline:
         
         if deposit_split_percentage < 0 or deposit_split_percentage > 1:
             raise ValueError("deposit_split_percentage must be between 0 and 1")
+    
+    def get_volume_decomposition_summary(self) -> pd.DataFrame:
+        """Get volume decomposition summary from AMM."""
+        if hasattr(self.amm, 'get_volume_decomposition_summary'):
+            return self.amm.get_volume_decomposition_summary()
+        return pd.DataFrame()
+    
+    def export_results(self, output_dir: str = ".") -> None:
+        """Export simulation results to CSV files."""
+        import os
+        
+        # Create output directory if it doesn't exist
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Export paths data
+        if not self.amm.paths_df.empty:
+            paths_file = os.path.join(output_dir, "amm_simulation_paths.csv")
+            # Extract all path data into a single DataFrame
+            all_paths = []
+            for i in range(len(self.amm.paths_df)):
+                path_data = self.amm.paths_df.iloc[i, 1].copy()
+                path_data['path_id'] = i
+                all_paths.append(path_data)
+            
+            if all_paths:
+                combined_df = pd.concat(all_paths, ignore_index=True)
+                combined_df.to_csv(paths_file, index=False)
+                print(f"Exported paths data to: {paths_file}")
+        
+        # Export endpoint statistics
+        if not self.plot.analytics.endpoint_df.empty:
+            endpoints_file = os.path.join(output_dir, "endpoint_statistics.csv")
+            self.plot.analytics.endpoint_df.to_csv(endpoints_file, index=False)
+            print(f"Exported endpoint statistics to: {endpoints_file}")
+        
+        # Export dropped paths log if available
+        if self.amm.dropped_paths_log:
+            dropped_file = os.path.join(output_dir, "dropped_paths_log.csv")
+            dropped_df = pd.DataFrame(self.amm.dropped_paths_log)
+            dropped_df.to_csv(dropped_file, index=False)
+            print(f"Exported dropped paths log to: {dropped_file}")
+        
+        print(f"\nAll results exported to: {os.path.abspath(output_dir)}")
 
 
-# ========== Main Execution Example ==========
+# ========== Enhanced Main Execution Example ==========
 if __name__ == "__main__":
     """
-    Example usage of the optimized AMM calculator.
+    Example usage of the enhanced AMM calculator with volume decomposition.
     
     Note: This requires actual data to run properly.
     """
     
-    # Example parameters
-    example_params = {
+    # Example parameters without volume decomposition
+    example_params_standard = {
         'pool_fee': 0.01,
         'amount_x_pool_t0': 1000000.0,
         'amount_y_pool_t0': 1000000.0,
@@ -1129,17 +1792,57 @@ if __name__ == "__main__":
         'predicted_period': 260,
         'captured_volume_perc': 1.0,
         'backtesting': True,
-        'plot_sim': False
+        'plot_sim': False,
+        'use_volume_decomposition': False,  # Standard mode
+        'drop_insufficient_volume': False,
+        'show_volume_plots': False
     }
     
-    print("AMM Calculator initialized successfully!")
+    # Example parameters with volume decomposition
+    example_params_decomposition = {
+        'pool_fee': 0.01,
+        'amount_x_pool_t0': 1000000.0,
+        'amount_y_pool_t0': 1000000.0,
+        'total_investment_x': 10000.0,
+        'max_paths': 100,
+        'deposit_split_percentage': 0.5,
+        'predicted_period': 260,
+        'captured_volume_perc': 0.8,
+        'backtesting': True,
+        'plot_sim': False,
+        'use_volume_decomposition': True,  # Enhanced mode
+        'drop_insufficient_volume': True,  # Drop paths with insufficient volume
+        'show_volume_plots': True
+    }
+    
+    print("ENHANCED AMM CALCULATOR WITH VOLUME DECOMPOSITION")
+    print("=" * 60)
+    print("\nAvailable operation modes:")
+    print("1. Standard mode - Traditional payoff calculation")
+    print("2. Enhanced mode - With volume decomposition analysis")
+    print("\nKey features of enhanced mode:")
+    print("  • Calculates minimum required volume for price moves")
+    print("  • Decomposes volume into arbitrage and noise components")
+    print("  • Directional fee allocation based on arbitrage flow")
+    print("  • Optional filtering of paths with insufficient volume")
+    print("  • Comprehensive visualization of volume dynamics")
+    
     print("\nAvailable classes:")
     print("1. PriceSim - Price simulations using GBM")
     print("2. VolumeSim - Volume simulations using UOP")
-    print("3. Payoff - AMM payoff calculations")
-    print("4. Analytics - Statistical analysis of results")
-    print("5. Visualization - 3D plotting of results")
-    print("6. OnePipeline - Complete pipeline execution")
+    print("3. Payoff - Enhanced AMM payoff calculations")
+    print("4. Analytics - Statistical analysis with volume metrics")
+    print("5. Visualization - Enhanced plotting with volume analysis")
+    print("6. OnePipeline - Complete pipeline with decomposition support")
     
     # Note: To run the pipeline, you need actual data
-    # pipeline = OnePipeline(**example_params, volume=your_volume_data)
+    # Example usage:
+    # 
+    # # Standard pipeline
+    # pipeline_std = OnePipeline(**example_params_standard, volume=your_volume_data)
+    #
+    # # Enhanced pipeline with volume decomposition
+    # pipeline_enh = OnePipeline(**example_params_decomposition, volume=your_volume_data)
+    #
+    # # Export results
+    # pipeline_enh.export_results("simulation_results")
