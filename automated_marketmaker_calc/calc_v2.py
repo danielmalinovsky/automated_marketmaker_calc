@@ -919,8 +919,8 @@ class Payoff:
         self.volume_decomposition.at[0, 'dropped'] = False
     
     def tn_calc(self, FX_timeseries: pd.DataFrame, volume_timeseries: pd.DataFrame, 
-               max_paths: int, use_volume_decomposition: bool = False,
-               drop_insufficient_volume: bool = False) -> None:
+            max_paths: int, use_volume_decomposition: bool = False,
+            drop_insufficient_volume: bool = False) -> None:
         """
         Calculate subsequent time steps with optional volume decomposition.
         
@@ -934,60 +934,83 @@ class Payoff:
         self.paths_df = pd.DataFrame()
         self.dropped_paths_count = 0
         self.dropped_paths_log = []
-        n_steps = len(FX_timeseries)
         paths_list = []
         
-        n_steps = min(len(FX_timeseries), len(volume_timeseries))
-
-        # Ensure all DataFrames have the correct integer index
-        n_steps = len(FX_timeseries)
-        self.pool_performance = self.pool_performance.reindex(range(n_steps))
-        self.pool_reserves = self.pool_reserves.reindex(range(n_steps))
-        self.depositor_reserves = self.depositor_reserves.reindex(range(n_steps))
-        self.depositor_performance = self.depositor_performance.reindex(range(n_steps))
-        self.volume_decomposition = self.volume_decomposition.reindex(range(n_steps))
-
+        # Get initial data from t0_calc as templates
+        initial_pool_perf = self.pool_performance.copy()
+        initial_pool_reserves = self.pool_reserves.copy()
+        initial_depositor_reserves = self.depositor_reserves.copy()
+        initial_depositor_perf = self.depositor_performance.copy()
+        initial_vol_decomp = self.volume_decomposition.copy()
+        
         for j in range(max_paths):
             # Skip if column doesn't exist
             if j >= len(FX_timeseries.columns):
                 continue
             
-            # Reset data structures for this path
-            self.pool_reserves = self.pool_reserves.iloc[0:1].copy().reset_index(drop=True)
-            self.depositor_reserves = self.depositor_reserves.iloc[0:1].copy().reset_index(drop=True)
-            self.depositor_performance = self.depositor_performance.iloc[0:1].copy().reset_index(drop=True)
-            self.pool_performance = self.pool_performance.iloc[0:1].copy().reset_index(drop=True)
-            self.volume_decomposition = self.volume_decomposition.iloc[0:1].copy().reset_index(drop=True)
+            # Reset data structures for this path using copies of initial data
+            self.pool_performance = initial_pool_perf.copy().reset_index(drop=True)
+            self.pool_reserves = initial_pool_reserves.copy().reset_index(drop=True)
+            self.depositor_reserves = initial_depositor_reserves.copy().reset_index(drop=True)
+            self.depositor_performance = initial_depositor_perf.copy().reset_index(drop=True)
+            self.volume_decomposition = initial_vol_decomp.copy().reset_index(drop=True)
             
             # Track if this path should be dropped
             drop_this_path = False
+            drop_steps_in_path = 0
+            
+            # Get the number of steps for this path (excluding time 0)
+            n_steps = min(len(FX_timeseries), len(volume_timeseries))
             
             for i in range(1, n_steps):
                 # Skip if data is missing
                 if pd.isna(FX_timeseries.iloc[i, j]) or pd.isna(volume_timeseries.iloc[i, j]):
+                    # Add placeholder row with NaN values
+                    self._add_placeholder_row(i)
                     continue
                 
-                # Get previous and current values
-                prev_FX = self.pool_performance.at[i-1, 'FX']
+                # CRITICAL FIX: Add new row for this time step BEFORE accessing it
+                if i >= len(self.pool_performance):
+                    # Initialize new rows with NaN values
+                    self.pool_performance.loc[i] = [np.nan, np.nan, np.nan]  # pool_fee, FX, volume
+                    self.pool_reserves.loc[i] = [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan]
+                    self.depositor_reserves.loc[i] = [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan]
+                    self.depositor_performance.loc[i] = [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan]
+                    self.volume_decomposition.loc[i] = [np.nan, np.nan, np.nan, False]
+                
+                # Now we can safely set values
+                # Copy previous fee rate from time i-1
+                fee_rate = self.pool_performance.at[i-1, 'pool_fee']
+                self.pool_performance.at[i, 'pool_fee'] = fee_rate
+                
+                # Get current FX and volume values
                 current_FX = FX_timeseries.iloc[i, j]
                 V_total = volume_timeseries.iloc[i, j]
+                prev_FX = self.pool_performance.at[i-1, 'FX']
+                
+                # Set current FX and volume
+                self.pool_performance.at[i, 'FX'] = current_FX
+                self.pool_performance.at[i, 'volume'] = V_total
                 
                 # Calculate volume decomposition if requested
                 V_required = 0.0
                 V_excess = 0.0
-                fee_rate = self.pool_performance.at[i, 'pool_fee']
-
-
+                
                 if use_volume_decomposition:
                     # Get initial X reserves for volume calculation
                     x0 = self.pool_reserves.at[i-1, 'amount_x']
                     V_required = self.calculate_volume_required(x0, prev_FX, current_FX)
                     
                     # Check volume sufficiency
-                    if drop_insufficient_volume and not self.check_volume_sufficiency(V_total, V_required):
-                        self.log_dropped_path(j, i, V_total, V_required, prev_FX, current_FX)
-                        drop_this_path = True
-                        x_fee, y_fee = self.calculate_fee_allocation(0, V_required, prev_FX, current_FX, fee_rate)
+                    if not self.check_volume_sufficiency(V_total, V_required):
+                        if drop_insufficient_volume:
+                            # Log and mark this step as dropped
+                            self.log_dropped_path(j, i, V_total, V_required, prev_FX, current_FX)
+                            drop_steps_in_path += 1
+                            
+                            # Fill this row with placeholder values and mark as dropped
+                            self._fill_dropped_row(i, V_total, V_required, current_FX)
+                            continue
                     
                     V_excess = self.calculate_volume_excess(V_total, V_required)
                     
@@ -996,11 +1019,6 @@ class Payoff:
                     self.volume_decomposition.at[i, 'V_required'] = V_required
                     self.volume_decomposition.at[i, 'V_excess'] = V_excess
                     self.volume_decomposition.at[i, 'dropped'] = False
-                
-                # Copy previous fee and set current FX and volume
-                self.pool_performance.at[i, 'pool_fee'] = self.pool_performance.at[i-1, 'pool_fee']
-                self.pool_performance.at[i, 'FX'] = current_FX
-                self.pool_performance.at[i, 'volume'] = V_total
                 
                 # Calculate new reserves based on FX change
                 prev_k = self.pool_reserves.at[i-1, 'k']
@@ -1013,8 +1031,6 @@ class Payoff:
                 )
                 
                 # Calculate fees
-                fee_rate = self.pool_performance.at[i, 'pool_fee']
-                
                 if use_volume_decomposition:
                     # Use decomposition-based fee calculation
                     x_fee, y_fee = self.calculate_fee_allocation(
@@ -1096,8 +1112,13 @@ class Payoff:
                     current_FX
                 )
             
-            # Skip if path was dropped
-            if drop_this_path:
+            # Check if we should drop the entire path
+            if drop_insufficient_volume and drop_steps_in_path > 0:
+                drop_this_path = True
+                print(f"Path {j} dropped: {drop_steps_in_path} insufficient volume steps")
+            
+            # Skip saving this path if it was completely dropped
+            if drop_this_path and drop_insufficient_volume:
                 continue
             
             # Create merged DataFrame for this path
@@ -1115,29 +1136,64 @@ class Payoff:
             # Store in paths DataFrame
             time_step_df = pd.DataFrame({'sim': [j], 'dfs': [merge_df.copy()]})
             paths_list.append(time_step_df)
-            # self.paths_df = pd.concat([self.paths_df, time_step_df], ignore_index=True)
             
             # Progress update
             if (j + 1) % 10 == 0 or j == max_paths - 1:
                 clear_output(wait=True)
                 print(f"Progress: {j+1}/{max_paths} paths processed")
                 if self.dropped_paths_count > 0:
-                    print(f"Dropped paths: {self.dropped_paths_count}")
+                    print(f"Dropped steps: {self.dropped_paths_count}")
         
-        self.paths_df = pd.concat(paths_list, ignore_index=True)
-
+        if paths_list:
+            self.paths_df = pd.concat(paths_list, ignore_index=True)
+        else:
+            self.paths_df = pd.DataFrame(columns=['sim', 'dfs'])
+        
         # Final summary
         print(f"\nProcessing complete. Total paths: {len(self.paths_df)}")
         if self.dropped_paths_count > 0:
-            print(f"Total dropped paths: {self.dropped_paths_count}")
-            print("\nDropped paths summary:")
-            for log in self.dropped_paths_log[:5]:  # Show first 5
-                print(f"  Path {log['path']}, Step {log['time_step']}: "
-                      f"V_total={log['V_total']:.2f}, V_required={log['V_required']:.2f}, "
-                      f"deficit={log['deficit']:.2f}")
-            if len(self.dropped_paths_log) > 5:
-                print(f"  ... and {len(self.dropped_paths_log) - 5} more")
+            print(f"Total dropped steps: {self.dropped_paths_count}")
+            if len(self.dropped_paths_log) > 0:
+                print("\nDropped steps summary (first 5):")
+                for log in self.dropped_paths_log[:5]:
+                    print(f"  Path {log['path']}, Step {log['time_step']}: "
+                        f"V_total={log['V_total']:.2f}, V_required={log['V_required']:.2f}, "
+                        f"deficit={log['deficit']:.2f}")
+                if len(self.dropped_paths_log) > 5:
+                    print(f"  ... and {len(self.dropped_paths_log) - 5} more")
     
+    # ========== Placeholder Method ==========
+
+    def _add_placeholder_row(self, i: int) -> None:
+        """Add placeholder row with NaN values for dropped or missing data."""
+        # Add rows if they don't exist
+        for df, num_cols in [(self.pool_performance, 3), 
+                            (self.pool_reserves, 6),
+                            (self.depositor_reserves, 6),
+                            (self.depositor_performance, 6),
+                            (self.volume_decomposition, 4)]:
+            if i >= len(df):
+                df.loc[i] = [np.nan] * num_cols
+
+    def _fill_dropped_row(self, i: int, V_total: float, V_required: float, current_FX: float) -> None:
+        """Fill a row with placeholder values for a dropped step."""
+        # Copy values from previous row for continuity
+        if i > 0:
+            self.pool_performance.loc[i] = self.pool_performance.loc[i-1]
+            self.pool_reserves.loc[i] = self.pool_reserves.loc[i-1]
+            self.depositor_reserves.loc[i] = self.depositor_reserves.loc[i-1]
+            self.depositor_performance.loc[i] = self.depositor_performance.loc[i-1]
+        
+        # Update FX to current value
+        self.pool_performance.at[i, 'FX'] = current_FX
+        self.pool_performance.at[i, 'volume'] = V_total
+        
+        # Set volume decomposition values
+        self.volume_decomposition.at[i, 'V_total'] = V_total
+        self.volume_decomposition.at[i, 'V_required'] = V_required
+        self.volume_decomposition.at[i, 'V_excess'] = 0.0
+        self.volume_decomposition.at[i, 'dropped'] = True
+
     # ========== Analysis Methods ==========
     
     def get_volume_decomposition_summary(self) -> pd.DataFrame:
