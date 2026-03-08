@@ -14,7 +14,6 @@ from .calc_v2 import (
     Analytics
 )
 
-from .research_visualizations import VolumePathAnalysis
 
 __all__ = [
     'PriceSim',

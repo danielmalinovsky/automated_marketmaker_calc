@@ -538,7 +538,7 @@ class Payoff:
         
         # New attributes for volume-arbitrage decomposition
         self.volume_decomposition = pd.DataFrame(
-            columns=['V_total', 'V_required', 'V_excess', 'dropped']
+            columns=['V_total', 'V_required', 'V_required_y', 'V_excess', 'dropped']
         )
         self.dropped_paths_count = 0
         self.dropped_paths_log = []
@@ -934,6 +934,7 @@ class Payoff:
         # Initialize volume decomposition tracking
         self.volume_decomposition.at[0, 'V_total'] = 0.0
         self.volume_decomposition.at[0, 'V_required'] = 0.0
+        self.volume_decomposition.at[0, 'V_required_y'] = 0.0
         self.volume_decomposition.at[0, 'V_excess'] = 0.0
         self.volume_decomposition.at[0, 'dropped'] = False
     
@@ -997,7 +998,7 @@ class Payoff:
                     self.pool_reserves.loc[i] = [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan]
                     self.depositor_reserves.loc[i] = [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan]
                     self.depositor_performance.loc[i] = [np.nan, np.nan, np.nan, np.nan, np.nan, np.nan]
-                    self.volume_decomposition.loc[i] = [np.nan, np.nan, np.nan, False]
+                    self.volume_decomposition.loc[i] = [np.nan, np.nan, np.nan, np.nan, False]
                 
                 # Now we can safely set values
                 # Copy previous fee rate from time i-1
@@ -1016,9 +1017,11 @@ class Payoff:
                 # IMPROVED: Calculate volume decomposition metrics (always, not just when flag is True)
                 # This ensures V_required and V_excess are always available for fee calculation
                 if use_volume_decomposition:
-                    # Get initial X reserves for volume calculation
+                    # Get initial X and Y reserves for volume calculation
                     x0 = self.pool_reserves.at[i-1, 'amount_x']
+                    y0 = self.pool_reserves.at[i-1, 'amount_y']
                     V_required = self.calculate_volume_required(x0, prev_FX, current_FX)
+                    V_required_y = self.calculate_volume_required(y0, prev_FX, current_FX)
                     
                     # Check volume sufficiency
                     if not self.check_volume_sufficiency(V_total, V_required):
@@ -1036,6 +1039,7 @@ class Payoff:
                 else:
                     # When decomposition is not used, treat all volume as excess (no minimum required)
                     V_required = 0.0
+                    V_required_y = 0.0
                     V_excess = V_total
                 
                 # Calculate new reserves based on FX change
@@ -1058,6 +1062,7 @@ class Payoff:
                     # Store volume decomposition metrics
                     self.volume_decomposition.at[i, 'V_total'] = V_total
                     self.volume_decomposition.at[i, 'V_required'] = V_required
+                    self.volume_decomposition.at[i, 'V_required_y'] = V_required_y
                     self.volume_decomposition.at[i, 'V_excess'] = V_excess
                     self.volume_decomposition.at[i, 'dropped'] = False
                 else:
@@ -1071,6 +1076,7 @@ class Payoff:
                     if not use_volume_decomposition:
                         self.volume_decomposition.at[i, 'V_total'] = V_total
                         self.volume_decomposition.at[i, 'V_required'] = 0.0
+                        self.volume_decomposition.at[i, 'V_required_y'] = 0.0
                         self.volume_decomposition.at[i, 'V_excess'] = V_total
                         self.volume_decomposition.at[i, 'dropped'] = False
                 
@@ -1199,7 +1205,7 @@ class Payoff:
                             (self.pool_reserves, 6),
                             (self.depositor_reserves, 6),
                             (self.depositor_performance, 6),
-                            (self.volume_decomposition, 4)]:
+                            (self.volume_decomposition, 5)]:
             if i >= len(df):
                 df.loc[i] = [np.nan] * num_cols
 
@@ -1219,6 +1225,7 @@ class Payoff:
         # Set volume decomposition values
         self.volume_decomposition.at[i, 'V_total'] = V_total
         self.volume_decomposition.at[i, 'V_required'] = V_required
+        self.volume_decomposition.at[i, 'V_required_y'] = 0.0
         self.volume_decomposition.at[i, 'V_excess'] = 0.0
         self.volume_decomposition.at[i, 'dropped'] = True
 
